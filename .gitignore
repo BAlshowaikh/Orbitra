@@ -3,7 +3,7 @@ HELP.md
 **/.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
-
+.claude/
 ### STS ###
 .apt_generated
 .classpath
@@ -31,3 +31,9 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Environment secrets ###
+# Real values live only in local .env files - never commit them. .env.example is the committed template.
+.env
+.env.*
+!.env.example
