@@ -4,6 +4,7 @@ HELP.md
 !**/src/main/**/target/
 !**/src/test/**/target/
 .claude/
+claude.md
 ### STS ###
 .apt_generated
 .classpath
