@@ -1,0 +1,61 @@
+# docker-compose.yml
+# Orchestrates every service's containers together. One shared Postgres
+# container hosts every service's own database - each service gets a
+# dedicated, isolated database + user inside it (see database/postgres/init.sh),
+# not a separate Postgres container per service.
+
+services:
+
+  # ----------- Shared Postgres -----------
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      # Bootstrap superuser - used only to initialize the cluster and by
+      # init.sh to create each service's own database/user. No application
+      # ever connects with these credentials directly.
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # Passed through so init.sh (running inside this same container) can
+      # read them - see database/postgres/init.sh for what it does with these.
+      AUTH_DB_NAME: ${AUTH_DB_NAME}
+      AUTH_DB_USER: ${AUTH_DB_USER}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
+    volumes:
+      # Named volume: data survives container restarts/rebuilds.
+      - postgres-data:/var/lib/postgresql/data
+      # Runs automatically, once, only if the volume above is empty.
+      - ./database/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ----------- auth-service -----------
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      # DB_HOST is the shared postgres service's name above - Compose lets
+      # containers reach each other using the other service's name as a
+      # hostname. DB_NAME/DB_USERNAME/DB_PASSWORD are auth-service's own
+      # dedicated credentials (created by init.sh), not the bootstrap superuser.
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${AUTH_DB_NAME}
+      DB_USERNAME: ${AUTH_DB_USER}
+      DB_PASSWORD: ${AUTH_DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS}
+    depends_on:
+      postgres:
+        # Waits for the healthcheck above to actually pass, not just for the
+        # container to start - Postgres takes a moment to become ready.
+        condition: service_healthy
+
+volumes:
+  postgres-data:

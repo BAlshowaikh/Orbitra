@@ -55,6 +55,26 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<!-- Flyway: versioned SQL migrations own the schema instead of Hibernate's
+		     ddl-auto - version comes from Spring Boot's own dependency-management
+		     BOM, same as the other starters above, so no <version> is pinned here. -->
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
+		<!-- Spring Boot 4.x split its old monolithic autoconfigure jar into
+		     per-feature modules (spring-boot-hibernate, spring-boot-jdbc, etc.
+		     visible above) - this is that piece for Flyway specifically, and
+		     nothing else we depend on pulls it in automatically. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-flyway</artifactId>
+		</dependency>
+
 		<!-- JWT generation/parsing/validation for issuing and verifying auth tokens -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
