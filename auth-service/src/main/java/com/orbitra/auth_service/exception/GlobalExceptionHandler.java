@@ -14,6 +14,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.Instant;
 import java.util.stream.Collectors;
@@ -53,6 +54,22 @@ public class GlobalExceptionHandler {
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining("; "));
 
+        return buildResponse(HttpStatus.BAD_REQUEST, message);
+    }
+
+    // An admin operation targeted an account id that doesn't exist.
+    @ExceptionHandler(AccountNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleAccountNotFound(AccountNotFoundException ex) {
+        return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    // Thrown when a @PathVariable can't be converted to its target type, e.g.
+    // PATCH /auth/admin/accounts/abc/status (non-numeric id). Without this,
+    // Spring would let it fall into the generic 500 handler below, which is
+    // misleading for what's actually a client input error.
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String message = "Invalid value for '" + ex.getName() + "': " + ex.getValue();
         return buildResponse(HttpStatus.BAD_REQUEST, message);
     }
 

@@ -52,6 +52,7 @@ public class AuthController {
         this.authService = authService;
     }
 
+    // ----------------- Endpoint 1: Register -----------------
     // Public per SecurityConfig. @Valid triggers the Bean Validation annotations
     // on RegisterRequest before this method body ever runs.
     @PostMapping("/register")
@@ -60,12 +61,14 @@ public class AuthController {
         return authService.register(request);
     }
 
+
     // Public per SecurityConfig.
     @PostMapping("/login")
     public AuthResponse login(@Valid @RequestBody LoginRequest request) {
         return authService.login(request);
     }
 
+    // ----------------- Endpoint 3: /me -----------------
     // Protected - reaching this method at all means JwtAuthFilter already
     // validated the token and populated Authentication, so identity is read
     // straight off it with no database lookup. Spring MVC injects Authentication

@@ -47,10 +47,16 @@ public class AuthService {
     // that's what the DB's unique constraint on email is the final guard for.)
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        // ADMIN accounts are never self-service - see project decision in memory
-        if (request.role() == Role.ADMIN) {
-            log.warn("Rejected registration attempt for email={} - self-registration as ADMIN is not allowed", request.email());
-            throw new IllegalArgumentException("Cannot self-register as ADMIN");
+        // Bootstrap-only: self-registration as ADMIN is allowed exactly once, to
+        // create the platform's first admin account. Once any ADMIN account
+        // exists, this path closes itself - further admins must be promoted by
+        // an existing admin instead (not yet built). Same check-then-act shape
+        // as the duplicate-email check below; the race is acceptable here since
+        // the worst case is a second self-registered admin, not an attacker
+        // granted admin over an arbitrary target account.
+        if (request.role() == Role.ADMIN && accountRepository.existsByRole(Role.ADMIN)) {
+            log.warn("Rejected registration attempt for email={} - an ADMIN account already exists, self-registration as ADMIN is closed", request.email());
+            throw new IllegalArgumentException("Cannot self-register as ADMIN - an admin account already exists");
         }
 
         if (accountRepository.existsByEmail(request.email())) {

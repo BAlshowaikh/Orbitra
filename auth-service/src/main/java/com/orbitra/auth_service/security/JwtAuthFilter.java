@@ -9,6 +9,7 @@
 package com.orbitra.auth_service.security;
 
 // ----------- IMPORTS -----------
+import com.orbitra.auth_service.repository.AccountRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,8 +32,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
 
-    public JwtAuthFilter(JwtService jwtService) {
+    // Checked on every request so a deactivated account's still-valid JWT stops
+    // working immediately, instead of only at its next login attempt.
+    private final AccountRepository accountRepository;
+
+    public JwtAuthFilter(JwtService jwtService, AccountRepository accountRepository) {
         this.jwtService = jwtService;
+        this.accountRepository = accountRepository;
     }
 
     @Override
@@ -53,20 +59,29 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         if (jwtService.isTokenValid(token)) {
             Long accountId = jwtService.extractAccountId(token);
-            String role = jwtService.extractRole(token);
 
-            // "ROLE_" prefix is a Spring Security convention required for
-            // hasRole()-style checks to recognize this as a role authority.
-            List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
+            // The token's signature/expiry being valid only proves it was
+            // legitimately issued at some point - it says nothing about whether
+            // the account has since been deactivated. Re-checked against the DB
+            // on every request so admin deactivation takes effect immediately,
+            // not just at the account's next login.
+            if (accountRepository.existsByIdAndEnabledTrue(accountId)) {
+                String role = jwtService.extractRole(token);
 
-            // principal = account id, not email - the same identifier used as
-            // the JWT's sub claim and shared across services.
-            Authentication authentication = new UsernamePasswordAuthenticationToken(accountId, null, authorities);
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+                // "ROLE_" prefix is a Spring Security convention required for
+                // hasRole()-style checks to recognize this as a role authority.
+                List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
+
+                // principal = account id, not email - the same identifier used as
+                // the JWT's sub claim and shared across services.
+                Authentication authentication = new UsernamePasswordAuthenticationToken(accountId, null, authorities);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
+            }
         }
-        // Invalid/expired token: SecurityContext stays empty rather than
-        // rejecting the request here directly - authorizeHttpRequests handles
-        // the actual reject-or-allow decision.
+        // Invalid/expired token, or a valid token for a deactivated/deleted
+        // account: SecurityContext stays empty rather than rejecting the
+        // request here directly - authorizeHttpRequests handles the actual
+        // reject-or-allow decision.
 
         filterChain.doFilter(request, response);
     }

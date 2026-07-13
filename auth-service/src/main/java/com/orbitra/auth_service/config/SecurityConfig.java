@@ -9,6 +9,7 @@ package com.orbitra.auth_service.config;
 
 // ------------- IMPORTS -------------
 import com.orbitra.auth_service.security.JwtAuthFilter;
+import com.orbitra.auth_service.security.RestAccessDeniedHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -27,8 +28,13 @@ public class SecurityConfig {
     // it injects PasswordEncoder/JwtService elsewhere.
     private final JwtAuthFilter jwtAuthFilter;
 
-    public SecurityConfig(JwtAuthFilter jwtAuthFilter) {
+    // Also a @Component - turns a wrong-role 403 into the app's normal JSON
+    // ErrorResponse shape instead of Spring Security's blank default body.
+    private final RestAccessDeniedHandler restAccessDeniedHandler;
+
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter, RestAccessDeniedHandler restAccessDeniedHandler) {
         this.jwtAuthFilter = jwtAuthFilter;
+        this.restAccessDeniedHandler = restAccessDeniedHandler;
     }
 
     // Marks this method's return value as a bean: Spring calls it once at
@@ -52,15 +58,23 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 // Stateless: no HttpSession, no cookies, don't remember anyone's session - every request proves its own identity
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // Only /auth/register and /auth/login are public; everything else requires authentication
+                // Only /auth/register and /auth/login are public; /auth/admin/**
+                // requires the ADMIN role specifically; everything else just
+                // requires authentication. Order matters - first match wins, so
+                // the more specific /auth/admin/** rule must come before the
+                // catch-all anyRequest().
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/register", "/auth/login").permitAll()
+                        .requestMatchers("/auth/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 // Run our JWT check before Spring Security's built-in username/password
                 // filter, so SecurityContext is already populated by the time
                 // authorizeHttpRequests decides whether to allow the request.
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                // hasRole("ADMIN") rejections land here instead of Spring
+                // Security's default blank-body 403.
+                .exceptionHandling(ex -> ex.accessDeniedHandler(restAccessDeniedHandler));
 
         return http.build();
     }
