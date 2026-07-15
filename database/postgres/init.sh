@@ -59,3 +59,26 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$AUTH_DB_NAME" \
      -v auth_db_user="$AUTH_DB_USER" <<-'EOSQL'
     GRANT ALL ON SCHEMA public TO :"auth_db_user";
 EOSQL
+
+# --- user-service's database + dedicated user ---
+# Same shape as the auth-service block above - this only ever runs against a
+# genuinely empty Postgres volume (first boot). Since this project's volume
+# already has data (auth-service already ran), this block documents what a
+# fresh setup creates, but has no effect on the already-running container -
+# user_service_db/user_service must also be provisioned manually, once,
+# against the live container (see docs/docker-setup.md).
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+     -v user_db_name="$USER_DB_NAME" \
+     -v user_db_user="$USER_DB_USER" \
+     -v user_db_password="$USER_DB_PASSWORD" <<-'EOSQL'
+    CREATE DATABASE :"user_db_name";
+    CREATE USER :"user_db_user" WITH PASSWORD :'user_db_password';
+
+    REVOKE ALL ON DATABASE :"user_db_name" FROM PUBLIC;
+    GRANT ALL PRIVILEGES ON DATABASE :"user_db_name" TO :"user_db_user";
+EOSQL
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$USER_DB_NAME" \
+     -v user_db_user="$USER_DB_USER" <<-'EOSQL'
+    GRANT ALL ON SCHEMA public TO :"user_db_user";
+EOSQL
