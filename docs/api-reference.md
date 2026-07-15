@@ -90,7 +90,44 @@ Idempotent — setting a value the account already has still returns `200`. Unkn
 
 ## User Service
 
-*Not yet built.*
+Base URL: `http://localhost:8082` · Source: `user-service/` · Package: `com.orbitra.user_service`
+
+Owns profile data only (name, contact info, preferences) — credentials/role/enabled status stay in Auth Service. Linked to `Account` only by sharing the same id value (no cross-database foreign key); `id` here is never auto-generated, it's always the caller's own account id from their JWT.
+
+| Method | Path | Role | Request body | Response body |
+|---|---|---|---|---|
+| GET | `/users/profile` | Any | — | `UserProfileResponse` |
+| PUT | `/users/profile` | Any | `UserProfileRequest` | `UserProfileResponse` |
+
+### `UserProfileRequest`
+```json
+{
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "phone": "+973-1234-5678",
+  "address": "123 Main St, Manama, Bahrain",
+  "dateOfBirth": "1995-06-12",
+  "profilePhotoUrl": null
+}
+```
+`firstName`/`lastName` required; everything else optional. `PUT` is an upsert — the very first call creates the profile, every call after updates it, same endpoint either way.
+
+### `UserProfileResponse`
+```json
+{
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "phone": "+973-1234-5678",
+  "address": "123 Main St, Manama, Bahrain",
+  "dateOfBirth": "1995-06-12",
+  "profilePhotoUrl": null
+}
+```
+No `id`/timestamps — this is always the caller's own profile, identified by their JWT, never by an id in the request/response body.
+
+Notes:
+- `GET /users/profile` returns `404` until the caller has PUT a profile at least once — there's no proactive creation at registration (see project decision below).
+- Validates JWTs with the same shared secret Auth Service signs with, but has no access to the `accounts` table — a deactivated account's still-valid token keeps working here until it naturally expires (resolved once JWT validation centralizes at the API Gateway, Week 2).
 
 ## Hotel Service
 
