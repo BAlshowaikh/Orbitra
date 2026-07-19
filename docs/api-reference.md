@@ -99,7 +99,7 @@ Owns profile data only (name, contact info, preferences) — credentials/role/en
 | GET | `/users/profile` | Any | — | `UserProfileResponse` |
 | PUT | `/users/profile` | Any | `UserProfileRequest` | `UserProfileResponse` |
 
-### `UserProfileRequest`
+### `UserProfileRequest` (request body shape — not a bound DTO, see note below)
 ```json
 {
   "firstName": "Jane",
@@ -110,7 +110,14 @@ Owns profile data only (name, contact info, preferences) — credentials/role/en
   "profilePhotoUrl": null
 }
 ```
-`firstName`/`lastName` required; everything else optional. `PUT` is an upsert — the very first call creates the profile, every call after updates it, same endpoint either way.
+`firstName`/`lastName` required on every call. `PUT` is an upsert — the very first call creates the profile, every call after updates it, same endpoint either way.
+
+**Partial-update semantics**: `phone`/`address`/`dateOfBirth`/`profilePhotoUrl` only change if the field is actually present in the request JSON:
+- Field **omitted entirely** → existing saved value is left untouched.
+- Field present with an **explicit `null`** → clears that field.
+- Field present with a **real value** → updates it.
+
+This means the request body is read as a raw JSON body (not bound to a validated DTO), specifically so "I didn't send this field" and "I sent `null`" can be told apart — a plain object/record can't distinguish those, since both become the same Java `null`.
 
 ### `UserProfileResponse`
 ```json
