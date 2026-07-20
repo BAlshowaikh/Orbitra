@@ -51,6 +51,14 @@ public class JwtService {
         return parseClaims(token).get("role", String.class);
     }
 
+    // ------------ METHOD 3b: Extract the partnerType from a valid JWT ------------
+    // Null for non-partner accounts - callers must not assume this is always present.
+    // Unused in this service today, kept in sync with auth-service's copy since
+    // both JwtService implementations must agree on the claim shape.
+    public String extractPartnerType(String token) {
+        return parseClaims(token).get("partnerType", String.class);
+    }
+
     // ------------ METHOD 4: Validate a JWT's signature and expiration ------------
     // Used by the auth filter to decide whether to reject a request before
     // trusting anything extracted from the token.

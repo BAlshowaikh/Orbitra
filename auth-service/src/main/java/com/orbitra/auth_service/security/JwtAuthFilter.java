@@ -22,6 +22,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -67,10 +68,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             // not just at the account's next login.
             if (accountRepository.existsByIdAndEnabledTrue(accountId)) {
                 String role = jwtService.extractRole(token);
+                String partnerType = jwtService.extractPartnerType(token);
 
                 // "ROLE_" prefix is a Spring Security convention required for
                 // hasRole()-style checks to recognize this as a role authority.
-                List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
+                List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+                authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+
+                // Extra "PARTNER_<type>" authority (e.g. PARTNER_HOTEL) so other
+                // services can distinguish a hotel partner from a flight partner
+                // via hasAuthority() without a second claim lookup of their own.
+                if (partnerType != null) {
+                    authorities.add(new SimpleGrantedAuthority("PARTNER_" + partnerType));
+                }
 
                 // principal = account id, not email - the same identifier used as
                 // the JWT's sub claim and shared across services.

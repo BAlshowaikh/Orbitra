@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -54,12 +55,20 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (jwtService.isTokenValid(token)) {
             Long accountId = jwtService.extractAccountId(token);
             String role = jwtService.extractRole(token);
+            String partnerType = jwtService.extractPartnerType(token);
 
             // "ROLE_" prefix is a Spring Security convention required for
             // hasRole()-style checks to recognize this as a role authority -
             // not used by any endpoint yet, but kept consistent with
             // auth-service's filter in case a role-restricted route is added later.
-            List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_" + role));
+            List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+            authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+
+            // Extra "PARTNER_<type>" authority, mirroring auth-service's filter -
+            // unused by this service's own routes today, kept for consistency.
+            if (partnerType != null) {
+                authorities.add(new SimpleGrantedAuthority("PARTNER_" + partnerType));
+            }
 
             // (principal, credentials, authorities) - principal is normally the
             // username, here it's accountId instead; credentials is normally the
