@@ -9,6 +9,13 @@ services:
   # ----------- Shared Postgres -----------
   postgres:
     image: postgres:16-alpine
+    ports:
+      # Exposes the container to the host so GUI tools (pgAdmin) can inspect
+      # it - not needed by any service itself, they all reach it via the
+      # "postgres" hostname on the Compose network instead. Host port is 5434,
+      # not 5432, because native Postgres installs on this machine already
+      # occupy 5432/5433 - two servers can't bind the same host port.
+      - "5434:5432"
     environment:
       # Bootstrap superuser - used only to initialize the cluster and by
       # init.sh to create each service's own database/user. No application
