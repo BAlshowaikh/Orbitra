@@ -10,13 +10,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.FieldError;
-import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.Instant;
-import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -29,16 +28,30 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    // Thrown by @Valid when a UserProfileRequest field fails its Bean
-    // Validation annotation (@NotBlank) - collects every failed field's
-    // message into one string rather than reporting only the first.
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
-        String message = ex.getBindingResult().getFieldErrors().stream()
-                .map(FieldError::getDefaultMessage)
-                .collect(Collectors.joining("; "));
+    // Manual validation failure on the raw request body (firstName/lastName
+    // missing or blank, dateOfBirth unparsable) - see UserProfileService,
+    // which reads the body as a JsonNode instead of a validated DTO.
+    @ExceptionHandler(InvalidProfileRequestException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidProfileRequest(InvalidProfileRequestException ex) {
+        return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
 
-        return buildResponse(HttpStatus.BAD_REQUEST, message);
+    // Thrown when the request body isn't valid JSON at all (truncated body,
+    // wrong Content-Type, etc). Without this, Spring would let it fall into
+    // the generic 500 handler below, which wrongly implies a server bug
+    // instead of a malformed request.
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMalformedBody(HttpMessageNotReadableException ex) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "Malformed request body");
+    }
+
+    // Thrown when the URL exists but was called with the wrong HTTP method
+    // (e.g. POST /users/profile instead of PUT). Without this, Spring would
+    // let it fall into the generic 500 handler below, which wrongly implies
+    // a server bug instead of a client mistake.
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        return buildResponse(HttpStatus.METHOD_NOT_ALLOWED, ex.getMessage());
     }
 
     // Fallback for anything not already handled above - a real bug, a DB

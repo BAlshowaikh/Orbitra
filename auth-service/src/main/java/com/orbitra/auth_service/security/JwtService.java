@@ -37,9 +37,11 @@ public class JwtService {
     }
 
     // ------------ METHOD 1: Generate a signed JWT for the given account ------------
-    // Builds a signed JWT for the given account: sub = account id, plus a role
-    // claim so downstream code (e.g. the auth filter in step 11) can authorize
-    // without a database lookup on every request.
+    // Builds a signed JWT for the given account: sub = account id, plus role and
+    // partnerType claims so downstream services (e.g. hotel-service telling a
+    // HOTEL partner apart from a FLIGHT partner) can authorize without a
+    // database lookup on every request - services never call each other
+    // synchronously, so these claims are the only source of truth they get.
     public String generateToken(Account account) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
@@ -47,6 +49,7 @@ public class JwtService {
         return Jwts.builder()
                 .subject(account.getId().toString())
                 .claim("role", account.getRole().name())
+                .claim("partnerType", account.getPartnerType() == null ? null : account.getPartnerType().name())
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(key)
@@ -65,13 +68,18 @@ public class JwtService {
                 .getPayload();
     }
 
-    // ------------ METHOD 3: Extract account id and role from a valid JWT ------------
+    // ------------ METHOD 3: Extract account id, role, and partnerType from a valid JWT ------------
     public Long extractAccountId(String token) {
         return Long.valueOf(parseClaims(token).getSubject());
     }
 
     public String extractRole(String token) {
         return parseClaims(token).get("role", String.class);
+    }
+
+    // Null for non-partner accounts - callers must not assume this is always present.
+    public String extractPartnerType(String token) {
+        return parseClaims(token).get("partnerType", String.class);
     }
 
     // ------------ METHOD 4: Expose expirationMs for AuthService ------------

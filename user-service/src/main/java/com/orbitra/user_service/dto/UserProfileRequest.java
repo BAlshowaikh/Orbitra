@@ -1,8 +1,11 @@
 /*
   UserProfileRequest.java
-  Request body for PUT /users/me. Crosses the HTTP boundary in place of the
-  UserProfile entity - the caller never sets id/createdAt/updatedAt directly,
-  those are derived from the caller's own JWT or managed by the entity itself.
+  Documents the expected shape of PUT /users/profile's request body. Not
+  currently bound to by UserController - that endpoint reads the raw request
+  as a JsonNode instead (see UserProfileService.upsertProfile), so it can
+  distinguish an omitted field ("leave unchanged") from an explicit null
+  ("clear it"), which a plain record can't do. Kept here as documentation of
+  the field shape, not as an active DTO.
 */
 package com.orbitra.user_service.dto;
 

@@ -9,6 +9,13 @@ services:
   # ----------- Shared Postgres -----------
   postgres:
     image: postgres:16-alpine
+    ports:
+      # Exposes the container to the host so GUI tools (pgAdmin) can inspect
+      # it - not needed by any service itself, they all reach it via the
+      # "postgres" hostname on the Compose network instead. Host port is 5434,
+      # not 5432, because native Postgres installs on this machine already
+      # occupy 5432/5433 - two servers can't bind the same host port.
+      - "5434:5432"
     environment:
       # Bootstrap superuser - used only to initialize the cluster and by
       # init.sh to create each service's own database/user. No application
@@ -24,6 +31,9 @@ services:
       USER_DB_NAME: ${USER_DB_NAME}
       USER_DB_USER: ${USER_DB_USER}
       USER_DB_PASSWORD: ${USER_DB_PASSWORD}
+      HOTEL_DB_NAME: ${HOTEL_DB_NAME}
+      HOTEL_DB_USER: ${HOTEL_DB_USER}
+      HOTEL_DB_PASSWORD: ${HOTEL_DB_PASSWORD}
     volumes:
       # Named volume: data survives container restarts/rebuilds.
       - postgres-data:/var/lib/postgresql/data
@@ -76,6 +86,28 @@ services:
       DB_PASSWORD: ${USER_DB_PASSWORD}
       # Same secret as auth-service - this service only validates tokens,
       # never issues its own.
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ----------- hotel-service -----------
+  hotel-service:
+    build:
+      context: ./hotel-service
+      dockerfile: Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      # Same shared postgres container as auth-service/user-service, own
+      # dedicated database.
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${HOTEL_DB_NAME}
+      DB_USERNAME: ${HOTEL_DB_USER}
+      DB_PASSWORD: ${HOTEL_DB_PASSWORD}
+      # Same secret as auth-service/user-service - this service only
+      # validates tokens, never issues its own.
       JWT_SECRET: ${JWT_SECRET}
     depends_on:
       postgres:

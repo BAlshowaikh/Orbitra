@@ -1,0 +1,30 @@
+# .dockerignore
+# Excludes files from the Docker build context. Keeps builds fast and, more
+# importantly, keeps real secrets out of any image layer.
+
+# Local secrets - .env holds real DB_PASSWORD/JWT_SECRET values; must never
+# be baked into an image. Real config is passed in at container run time via
+# environment variables instead (see docker-compose.yml).
+.env
+.env.example
+
+# Build output - regenerated fresh inside the container by the build stage.
+target/
+
+# Version control
+.git
+.gitignore
+
+# IDE/editor metadata
+.idea/
+.vscode/
+*.iml
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Docker's own files
+Dockerfile
+docker-compose.yml
+.dockerignore
