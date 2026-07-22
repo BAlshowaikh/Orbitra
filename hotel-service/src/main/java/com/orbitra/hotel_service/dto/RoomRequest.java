@@ -1,8 +1,10 @@
 /*
   RoomRequest.java
-  Request body for POST/PUT /hotels/{hotelId}/rooms (PARTNER_HOTEL, owner
-  only) - adds or updates a hotel's own instance of a RoomType. Picks the
-  RoomType by id (the catalog dropdown), never by free-text name.
+  Request body for POST /hotels/{hotelId}/rooms (PARTNER_HOTEL, owner only) -
+  adds a hotel's own instance of a RoomType, picked by id (the catalog
+  dropdown), never free-text. PATCH .../rooms/{roomId} reads a raw JsonNode
+  instead (see RoomService.update), so this record just documents that
+  endpoint's field shape too.
 */
 package com.orbitra.hotel_service.dto;
 
