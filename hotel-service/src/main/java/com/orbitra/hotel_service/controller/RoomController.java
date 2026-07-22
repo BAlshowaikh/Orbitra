@@ -1,7 +1,8 @@
 /*
   RoomController.java
-  Thin HTTP layer for a hotel's rooms and their availability - all
-  owner-only. Business logic lives entirely in RoomService.
+  Thin HTTP layer for a hotel's rooms and their availability - listing rooms
+  is public (owner sees inactive too), everything else is owner-only.
+  Business logic lives entirely in RoomService.
 */
 package com.orbitra.hotel_service.controller;
 
@@ -40,20 +41,26 @@ public class RoomController {
         this.roomService = roomService;
     }
 
-    // ------------------ Endpoint 1: Add a room -----------------
+    // ------------------ Endpoint 1: List a hotel's rooms (public, owner sees inactive too) -----------------
+    @GetMapping
+    public List<RoomResponse> getRooms(Authentication authentication, @PathVariable Long hotelId) {
+        return roomService.getRooms(extractAccountIdOrNull(authentication), hotelId);
+    }
+
+    // ------------------ Endpoint 2: Add a room -----------------
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public RoomResponse create(Authentication authentication, @PathVariable Long hotelId, @Valid @RequestBody RoomRequest request) {
         return roomService.create(extractAccountId(authentication), hotelId, request);
     }
 
-    // ------------------ Endpoint 2: Update a room (partial update) -----------------
+    // ------------------ Endpoint 3: Update a room (partial update) -----------------
     @PatchMapping("/{roomId}")
     public RoomResponse update(Authentication authentication, @PathVariable Long hotelId, @PathVariable Long roomId, @RequestBody JsonNode body) {
         return roomService.update(extractAccountId(authentication), hotelId, roomId, body);
     }
 
-    // ------------------ Endpoint 3: Activate/deactivate a room -----------------
+    // ------------------ Endpoint 4: Activate/deactivate a room -----------------
     @PatchMapping("/{roomId}/status")
     public RoomResponse updateStatus(
             Authentication authentication, @PathVariable Long hotelId, @PathVariable Long roomId,
@@ -62,7 +69,7 @@ public class RoomController {
         return roomService.updateStatus(extractAccountId(authentication), hotelId, roomId, request.active());
     }
 
-    // ------------------ Endpoint 4: Get availability calendar -----------------
+    // ------------------ Endpoint 5: Get availability calendar -----------------
     @GetMapping("/{roomId}/availability")
     public List<AvailabilityResponse> getAvailability(
             Authentication authentication, @PathVariable Long hotelId, @PathVariable Long roomId,
@@ -71,7 +78,7 @@ public class RoomController {
         return roomService.getAvailability(extractAccountId(authentication), hotelId, roomId, startDate, endDate);
     }
 
-    // ------------------ Endpoint 5: Set availability for a date range -----------------
+    // ------------------ Endpoint 6: Set availability for a date range -----------------
     // Full-replace semantics (not merge-patch) - every field on
     // AvailabilityRangeRequest is required, so there's no omitted-field risk.
     @PutMapping("/{roomId}/availability")
@@ -84,5 +91,13 @@ public class RoomController {
 
     private Long extractAccountId(Authentication authentication) {
         return (Long) authentication.getPrincipal();
+    }
+
+    // Anonymous callers (this route is public) have a non-Long principal - return null instead of a ClassCastException.
+    private Long extractAccountIdOrNull(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof Long id)) {
+            return null;
+        }
+        return id;
     }
 }

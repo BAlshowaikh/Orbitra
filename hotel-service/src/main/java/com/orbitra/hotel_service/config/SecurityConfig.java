@@ -71,6 +71,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/hotels/{id}/status")
                         .hasAnyAuthority("PARTNER_HOTEL", "ROLE_ADMIN")
 
+                        // --- List a hotel's rooms - public, but must precede
+                        //     the partner-only blanket rule below or it would
+                        //     be shadowed by it. Owner sees inactive rooms too;
+                        //     everyone else only sees active ones (enforced in
+                        //     RoomService, not here). ---
+                        .requestMatchers(HttpMethod.GET, "/hotels/*/rooms").permitAll()
+
                         // --- Hotel/room/availability writes and the partner's
                         //     own availability calendar view - all partner-only,
                         //     no public GETs under a specific hotel's rooms ---
