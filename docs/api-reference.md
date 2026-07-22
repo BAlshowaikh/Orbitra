@@ -138,7 +138,154 @@ Notes:
 
 ## Hotel Service
 
-*Not yet built.*
+Base URL: `http://localhost:8083` · Source: `hotel-service/` · Package: `com.orbitra.hotel_service`
+
+Entities: `Hotel` (owned by a PARTNER account via `ownerId`, a partner may own many) → `Room` (a hotel's own priced/staffed instance of a `RoomType`) → `Availability` (per-room, per-date override; a missing row means "fully available," i.e. `COALESCE(row's availableCount, room.totalInventory)`). `RoomType` is a separate, admin-managed global catalog (e.g. "Deluxe King") partners pick from by id when adding a `Room`.
+
+**Role column notes specific to this service:**
+- `PARTNER_HOTEL` = `PARTNER` role **and** `partnerType: HOTEL` on the JWT (a `PARTNER_FLIGHT` account is rejected).
+- `(owner)` = ownership is checked in the service layer (JWT `sub` vs. `Hotel.ownerId`), not just role — a `PARTNER_HOTEL` token for a *different* hotel still gets `403`.
+- `Public (+owner)` = anyone can call it, but the owning partner's token unlocks extra data (inactive rows) the response otherwise omits.
+
+### Hotels
+
+| Method | Path | Role | Request body | Response body |
+|---|---|---|---|---|
+| GET | `/hotels` | Public | — (query: `city`, `checkIn`, `checkOut`, `guests`, `minPrice`, `maxPrice`, `page`, `size`, all optional) | `PagedResponse<HotelSearchResultResponse>` |
+| GET | `/hotels/mine` | PARTNER_HOTEL | — (query: `page`, `size`) | `PagedResponse<HotelResponse>` |
+| GET | `/hotels/{id}` | Public | — | `HotelDetailResponse` |
+| POST | `/hotels` | PARTNER_HOTEL | `HotelRequest` | `HotelResponse` |
+| PATCH | `/hotels/{id}` | PARTNER_HOTEL (owner) | Partial JSON (see below) | `HotelResponse` |
+| PATCH | `/hotels/{id}/status` | PARTNER_HOTEL (owner) or ADMIN | `UpdateActiveRequest` | `HotelResponse` |
+
+### Rooms (nested under a hotel)
+
+| Method | Path | Role | Request body | Response body |
+|---|---|---|---|---|
+| GET | `/hotels/{hotelId}/rooms` | Public (+owner) | — | `List<RoomResponse>` |
+| POST | `/hotels/{hotelId}/rooms` | PARTNER_HOTEL (owner) | `RoomRequest` | `RoomResponse` |
+| PATCH | `/hotels/{hotelId}/rooms/{roomId}` | PARTNER_HOTEL (owner) | Partial JSON (see below) | `RoomResponse` |
+| PATCH | `/hotels/{hotelId}/rooms/{roomId}/status` | PARTNER_HOTEL (owner) | `UpdateActiveRequest` | `RoomResponse` |
+| GET | `/hotels/{hotelId}/rooms/{roomId}/availability` | PARTNER_HOTEL (owner) | — (query, required: `startDate`, `endDate`) | `List<AvailabilityResponse>` |
+| PUT | `/hotels/{hotelId}/rooms/{roomId}/availability` | PARTNER_HOTEL (owner) | `AvailabilityRangeRequest` | `List<AvailabilityResponse>` |
+
+### Room Types (admin catalog)
+
+| Method | Path | Role | Request body | Response body |
+|---|---|---|---|---|
+| GET | `/room-types` | Public (+admin) | — | `List<RoomTypeResponse>` |
+| POST | `/room-types` | ADMIN | `RoomTypeRequest` | `RoomTypeResponse` |
+| PATCH | `/room-types/{id}` | ADMIN | Partial JSON (see below) | `RoomTypeResponse` |
+| PATCH | `/room-types/{id}/status` | ADMIN | `UpdateActiveRequest` | `RoomTypeResponse` |
+
+### `HotelRequest` (create only — `POST /hotels`)
+```json
+{
+  "name": "Grand Plaza Hotel",
+  "description": "A luxury hotel in the city center",
+  "address": "123 Main St",
+  "city": "Dubai",
+  "country": "UAE",
+  "amenities": ["pool", "gym", "free wifi"]
+}
+```
+
+### `HotelResponse`
+```json
+{
+  "id": 1,
+  "ownerId": 7,
+  "name": "Grand Plaza Hotel",
+  "description": "A luxury hotel in the city center",
+  "address": "123 Main St",
+  "city": "Dubai",
+  "country": "UAE",
+  "amenities": ["pool", "gym", "free wifi"],
+  "active": true,
+  "createdAt": "2026-07-20T10:00:00Z"
+}
+```
+
+### `HotelSearchResultResponse` (thinner than `HotelResponse` — one card per search result)
+```json
+{ "id": 1, "name": "Grand Plaza Hotel", "city": "Dubai", "country": "UAE", "minNightlyPrice": 150.00 }
+```
+`minNightlyPrice` is the cheapest active `Room`'s price at that hotel, `null` if it has no active rooms yet.
+
+### `HotelDetailResponse`
+```json
+{
+  "id": 1,
+  "name": "Grand Plaza Hotel",
+  "description": "A luxury hotel in the city center",
+  "address": "123 Main St",
+  "city": "Dubai",
+  "country": "UAE",
+  "amenities": ["pool", "gym", "free wifi"],
+  "rooms": [ /* array of RoomResponse, active only */ ]
+}
+```
+
+### `RoomRequest` (create only — `POST /hotels/{hotelId}/rooms`)
+```json
+{
+  "roomTypeId": 1,
+  "capacity": 2,
+  "basePricePerNight": 150.00,
+  "totalInventory": 10,
+  "facilities": ["WiFi", "TV", "Balcony"]
+}
+```
+`roomTypeId` must reference an active `RoomType`; a hotel can only have one `Room` per `RoomType` (`409` on a duplicate).
+
+### `RoomResponse`
+```json
+{
+  "id": 5,
+  "hotelId": 1,
+  "roomTypeId": 1,
+  "roomTypeName": "Deluxe King",
+  "capacity": 2,
+  "basePricePerNight": 150.00,
+  "totalInventory": 10,
+  "facilities": ["WiFi", "TV", "Balcony"],
+  "active": true
+}
+```
+
+### `RoomTypeRequest` (create only — `POST /room-types`)
+```json
+{ "name": "Deluxe King", "description": "A spacious room with a king-size bed" }
+```
+`name` must be unique (`409` on a duplicate).
+
+### `RoomTypeResponse`
+```json
+{ "id": 1, "name": "Deluxe King", "description": "A spacious room with a king-size bed", "active": true }
+```
+
+### `AvailabilityRangeRequest` (`PUT .../availability`)
+```json
+{ "startDate": "2026-08-01", "endDate": "2026-08-07", "availableCount": 5 }
+```
+Upserts one `Availability` row per date in `[startDate, endDate]` with the given count — full-replace, not merge-patch (every field is required, so there's no omitted-field ambiguity). Range capped at 366 days per request.
+
+### `AvailabilityResponse`
+```json
+{ "date": "2026-08-01", "availableCount": 5 }
+```
+The count already has the row-absence-means-default-available fallback applied — callers never need to know whether a given date had an explicit override row.
+
+### `UpdateActiveRequest` (shared by every `.../status` endpoint in this service)
+```json
+{ "active": false }
+```
+
+**Partial-update semantics** (`PATCH /hotels/{id}`, `PATCH .../rooms/{roomId}`, `PATCH /room-types/{id}`): every field is optional and only changes if present in the request JSON — omitted means "leave unchanged," same convention as `user-service`'s `PUT /users/profile`. Unlike `user-service`, there's no field that's *always* required on every call — string fields are still validated non-blank if you do send them. Example: updating just a hotel's address —
+```json
+{ "address": "456 New St" }
+```
+The plain create-time DTOs (`HotelRequest`/`RoomRequest`/`RoomTypeRequest`) are not bound on these `PATCH` routes; the body is read as a raw JSON object instead.
 
 ## Flight Service
 
