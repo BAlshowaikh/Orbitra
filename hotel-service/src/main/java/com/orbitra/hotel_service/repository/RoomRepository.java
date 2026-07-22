@@ -8,8 +8,12 @@ package com.orbitra.hotel_service.repository;
 // ------------------- IMPORTS -------------------
 import com.orbitra.hotel_service.model.Room;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 // ------------------- REPOSITORY -------------------
 public interface RoomRepository extends JpaRepository<Room, Long> {
@@ -28,4 +32,8 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
     // lets the service layer return a clean 409 instead of a raw constraint
     // violation.
     boolean existsByHotelIdAndRoomTypeId(Long hotelId, Long roomTypeId);
+
+    // Cheapest active room's price for a hotel - empty if it has none yet.
+    @Query("SELECT MIN(r.basePricePerNight) FROM Room r WHERE r.hotel.id = :hotelId AND r.active = true")
+    Optional<BigDecimal> findMinActivePriceByHotelId(@Param("hotelId") Long hotelId);
 }
