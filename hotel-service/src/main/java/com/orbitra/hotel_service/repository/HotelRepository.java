@@ -29,7 +29,7 @@ public interface HotelRepository extends JpaRepository<Hotel, Long> {
             value = """
                     SELECT h FROM Hotel h
                     WHERE h.active = true
-                    AND (:city IS NULL OR LOWER(h.city) = LOWER(:city))
+                    AND (:city IS NULL OR LOWER(h.city) = LOWER(CAST(:city AS string)))
                     AND EXISTS (
                         SELECT 1 FROM Room r
                         WHERE r.hotel = h
@@ -48,7 +48,7 @@ public interface HotelRepository extends JpaRepository<Hotel, Long> {
             countQuery = """
                     SELECT COUNT(h) FROM Hotel h
                     WHERE h.active = true
-                    AND (:city IS NULL OR LOWER(h.city) = LOWER(:city))
+                    AND (:city IS NULL OR LOWER(h.city) = LOWER(CAST(:city AS string)))
                     AND EXISTS (
                         SELECT 1 FROM Room r
                         WHERE r.hotel = h
