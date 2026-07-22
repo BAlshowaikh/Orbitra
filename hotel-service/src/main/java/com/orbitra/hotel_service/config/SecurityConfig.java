@@ -75,7 +75,7 @@ public class SecurityConfig {
                         //     own availability calendar view - all partner-only,
                         //     no public GETs under a specific hotel's rooms ---
                         .requestMatchers(HttpMethod.POST, "/hotels").hasAuthority("PARTNER_HOTEL")
-                        .requestMatchers(HttpMethod.PUT, "/hotels/{id}").hasAuthority("PARTNER_HOTEL")
+                        .requestMatchers(HttpMethod.PATCH, "/hotels/{id}").hasAuthority("PARTNER_HOTEL")
                         .requestMatchers("/hotels/*/rooms/**").hasAuthority("PARTNER_HOTEL")
 
                         // --- Room type catalog - admin-managed, GET already
