@@ -106,42 +106,45 @@
 - Introduce **API Gateway** + **Service Discovery** here (once 2+ services exist, this becomes meaningful to practice)
 - Introduce caching (Redis) for search-heavy endpoints
 
-### **Phase 3 — Booking & Payment**
-`Booking Service` + `Payment Service`
+### **Phase 3 — Booking**
+`Booking Service`
 - Reserve hotel room / flight seat
-- Payment flow (mock gateway)
-- Cancellation with refund rules
 - Booking history (hotel + flight separately for now)
-- Concurrency handling for inventory
-- This is where you implement your first **Saga / compensating transaction** (payment fails → release inventory hold)
+- Concurrency handling for inventory (optimistic/pessimistic locking on room/seat availability)
+- Booking status stays `PENDING`/`CANCELLED` only in this phase — `CONFIRMED`/refund-driven `CANCELLED` waits for Payment Service (Phase 5); the Saga/compensating-transaction work (release inventory hold on payment failure) is deferred along with it, since there's no payment leg yet to fail
+- **Frontend (Angular) build starts once this phase is done** — Auth/User/Hotel/Flight/Booking + Gateway + Eureka is enough surface area for a real demoable app, and there's no reason to gate frontend learning behind Payment/Packages
 
-### **Phase 4 — Packages (Composition Layer)**
+### **Phase 4 — Engagement + Payment**
+`Payment Service` + `Review Service` + `Notification Service`
+- Payment flow (mock gateway), cancellation with refund rules — this is where Booking's status lifecycle actually completes (`PENDING` → `CONFIRMED`/refunded `CANCELLED`)
+- This is where you implement your first **Saga / compensating transaction** (payment fails → release inventory hold) — moved here from the old Phase 3 since it needs Payment to exist first
+- Reviews/ratings (post-completion only, tied to booking ID)
+- Favorites (hotel/flight)
+- Notifications: confirmation, payment status, cancellation, reminders
+- Admin: moderate reviews
+
+### **Phase 5 — Packages (Composition Layer)** *(deferred / stretch phase — not required for the core project to be demo-complete)*
 `Package Service`
 - Combine a hotel offer + flight offer into a bundle
 - Orchestrate parallel availability checks (call Hotel Service + Flight Service)
 - Combined pricing/discount logic
-- Package booking → creates linked hotel + flight bookings atomically (extends the Saga pattern from Phase 3 to a two-service, two-leg transaction)
+- Package booking → creates linked hotel + flight bookings atomically (extends the Saga pattern from Phase 4 to a two-service, two-leg transaction)
 - Admin: curate featured packages
-
-### **Phase 5 — Engagement**
-`Review Service` + `Notification Service`
-- Reviews/ratings (post-completion only, tied to booking ID)
-- Favorites (hotel/flight/package)
-- Notifications: confirmation, payment status, cancellation, reminders
-- Admin: moderate reviews
+- Revisit this phase only after Phases 1–4 are solid and there's time left — it's the most expensive addition for the least demo-critical payoff, since it's a composition on top of things that already work
 
 ### **Cross-Cutting (introduce progressively, not a separate phase)**
 - API Gateway — start Phase 2
 - Service Discovery — start Phase 2
-- Circuit Breaker (Resilience4j) — start Phase 3, once services call each other synchronously
-- Message broker (Kafka/RabbitMQ) — start Phase 3 for booking/payment events, reused heavily in Phase 4
-- Centralized config/logging — whenever it starts getting annoying to manage manually (usually mid Phase 3)
+- Circuit Breaker (Resilience4j) — start Phase 4, once services call each other synchronously
+- Message broker (Kafka/RabbitMQ) — start Phase 4 for booking/payment events, reused heavily in Phase 5
+- Centralized config/logging — whenever it starts getting annoying to manage manually (usually mid Phase 4)
 
 ---
 
 ## 6. Why This Order
 
 - Phase 1–2 give you working, demoable pieces before any distributed-transaction complexity.
-- Phase 3 is where the real microservices lessons live: concurrency, consistency, partial failure.
-- Phase 4 (Packages) reuses everything from Phase 3 but forces you to orchestrate **two** services in one transaction instead of one — a natural step up in difficulty, not a jump.
-- Phase 5 is lower-risk, feature-layer work that depends on Booking data existing.
+- Phase 3 (Booking alone) still teaches concurrency/inventory-locking without needing Payment to exist yet — and gives the frontend something real to call.
+- Frontend (Angular) starting after Phase 3 means it's learned in parallel with the harder backend phases rather than blocking on all of them first.
+- Phase 4 is where the remaining real microservices lessons live: payment, consistency, partial failure, the first Saga/compensating transaction.
+- Phase 5 (Packages) reuses everything from Phase 4 but forces you to orchestrate **two** services in one transaction instead of one — a natural step up in difficulty, not a jump. It's explicitly a stretch goal now, not a required phase.
