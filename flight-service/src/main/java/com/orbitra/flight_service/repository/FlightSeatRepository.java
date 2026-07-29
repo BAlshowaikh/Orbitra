@@ -8,6 +8,7 @@ package com.orbitra.flight_service.repository;
 // ------------------- IMPORTS -------------------
 import com.orbitra.flight_service.model.FlightSeat;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -47,4 +48,20 @@ public interface FlightSeatRepository extends JpaRepository<FlightSeat, Long> {
             AND (:excludeSeatId IS NULL OR fs.id <> :excludeSeatId)
             """)
     Integer sumTotalInventoryByFlightIdExcluding(@Param("flightId") Long flightId, @Param("excludeSeatId") Long excludeSeatId);
+
+    // Atomic guarded decrement/increment for reserve/release (called by
+    // Booking Service) - the WHERE guard is what makes this concurrency-safe:
+    // Postgres's own row locking during the UPDATE means two simultaneous
+    // reserve calls can't both succeed on the last seat, with no need for a
+    // separate optimistic-locking retry loop. Returns rows-affected (0 or 1)
+    // so the service layer can tell "reserved" from "nothing left".
+    @Modifying
+    @Query("UPDATE FlightSeat fs SET fs.availableCount = fs.availableCount - 1 WHERE fs.id = :seatId AND fs.availableCount > 0")
+    int decrementAvailableCount(@Param("seatId") Long seatId);
+
+    // Capped at totalInventory so a release can't push availableCount past
+    // what the partner actually allocated.
+    @Modifying
+    @Query("UPDATE FlightSeat fs SET fs.availableCount = fs.availableCount + 1 WHERE fs.id = :seatId AND fs.availableCount < fs.totalInventory")
+    int incrementAvailableCount(@Param("seatId") Long seatId);
 }

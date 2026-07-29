@@ -17,6 +17,7 @@ import com.orbitra.flight_service.exception.FlightSeatNotFoundException;
 import com.orbitra.flight_service.exception.ForbiddenException;
 import com.orbitra.flight_service.exception.InvalidRequestException;
 import com.orbitra.flight_service.exception.SeatClassNotFoundException;
+import com.orbitra.flight_service.exception.SeatUnavailableException;
 import com.orbitra.flight_service.model.Flight;
 import com.orbitra.flight_service.model.FlightSeat;
 import com.orbitra.flight_service.model.SeatClass;
@@ -125,7 +126,49 @@ public class FlightSeatService {
         return seats.stream().map(this::toResponse).toList();
     }
 
+    // ---------------- METHOD 5: Reserve one seat (called by Booking Service, any TRAVELER) ----------------
+    @Transactional
+    public FlightSeatResponse reserve(Long flightId, Long seatId) {
+        FlightSeat flightSeat = getReservableFlightSeat(flightId, seatId);
+
+        int updated = flightSeatRepository.decrementAvailableCount(seatId);
+        if (updated == 0) {
+            throw new SeatUnavailableException("No seats left for flight seat: " + seatId);
+        }
+
+        // Re-fetch to get the post-decrement availableCount for the response -
+        // flightSeat above is now stale (the UPDATE ran outside its managed state).
+        return toResponse(flightSeatRepository.findById(seatId).orElseThrow());
+    }
+
+    // ---------------- METHOD 6: Release one seat (called by Booking Service, on cancellation) ----------------
+    @Transactional
+    public FlightSeatResponse release(Long flightId, Long seatId) {
+        getReservableFlightSeat(flightId, seatId);
+
+        int updated = flightSeatRepository.incrementAvailableCount(seatId);
+        if (updated == 0) {
+            // Shouldn't happen if Booking Service only releases what it
+            // actually reserved - a safety net against a double-release bug,
+            // not an expected user-facing case.
+            throw new InvalidRequestException("Flight seat " + seatId + " is already at full availability");
+        }
+
+        return toResponse(flightSeatRepository.findById(seatId).orElseThrow());
+    }
+
     // ---------------- Helpers ----------------
+
+    // ------------- HELPER 0: Get a seat under the given flight, both must be active -------------
+    private FlightSeat getReservableFlightSeat(Long flightId, Long seatId) {
+        FlightSeat flightSeat = flightSeatRepository.findById(seatId)
+                .filter(s -> s.getFlight().getId().equals(flightId))
+                .orElseThrow(() -> new FlightSeatNotFoundException("Flight seat not found: " + seatId));
+        if (!flightSeat.isActive() || !flightSeat.getFlight().isActive()) {
+            throw new FlightSeatNotFoundException("Flight seat not found: " + seatId);
+        }
+        return flightSeat;
+    }
 
     // ------------- HELPER 1: Get a flight and ensure the caller owns it -------------
     private Flight getOwnedFlight(Long flightId, Long callerId) {

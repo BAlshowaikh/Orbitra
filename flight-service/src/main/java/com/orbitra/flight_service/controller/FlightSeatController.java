@@ -1,9 +1,11 @@
 /*
   FlightSeatController.java
   Thin HTTP layer for a flight's seats - listing is public (owner sees
-  inactive too), everything else is owner-only. No availability-range
-  endpoints, unlike RoomController - availableCount is booking-driven only,
-  never partner-submitted. Business logic lives entirely in FlightSeatService.
+  inactive too), CRUD is owner-only, reserve/release are TRAVELER-only (called
+  by Booking Service, forwarding the traveler's own JWT - not the owning
+  partner's). No availability-range endpoints, unlike RoomController -
+  availableCount is booking-driven only, never partner-submitted directly.
+  Business logic lives entirely in FlightSeatService.
 */
 package com.orbitra.flight_service.controller;
 
@@ -63,6 +65,18 @@ public class FlightSeatController {
             @Valid @RequestBody UpdateActiveRequest request
     ) {
         return flightSeatService.updateStatus(extractAccountId(authentication), flightId, seatId, request.active());
+    }
+
+    // ------------------ Endpoint 5: Reserve one seat (TRAVELER, called by Booking Service) -----------------
+    @PostMapping("/{seatId}/reserve")
+    public FlightSeatResponse reserve(@PathVariable Long flightId, @PathVariable Long seatId) {
+        return flightSeatService.reserve(flightId, seatId);
+    }
+
+    // ------------------ Endpoint 6: Release one seat (TRAVELER, called by Booking Service on cancel) -----------------
+    @PostMapping("/{seatId}/release")
+    public FlightSeatResponse release(@PathVariable Long flightId, @PathVariable Long seatId) {
+        return flightSeatService.release(flightId, seatId);
     }
 
     private Long extractAccountId(Authentication authentication) {
