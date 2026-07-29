@@ -35,11 +35,20 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 **Business goal:** the actual "reserve this room / this seat" action — the core value proposition of a booking platform.
 
 **Sequencing note**: built *before* Eureka/Gateway exist (deliberately reordered — see `travel-platform-plan.md` §5/§6 for the full reasoning). Calls Hotel Service / Flight Service via plain REST at their Docker Compose hostnames (`http://hotel-service:8083`, `http://flight-service:8084`), and gets its own `JwtService`/`JwtAuthFilter` copy same as every other service so far. Both get deliberately rewritten once 3.3/3.4 below exist — known, accepted rework, not a mistake.
-- [ ] `Booking` entity — `id`, `userId`, `type` (`HOTEL`/`FLIGHT`), `referenceId`, `status` (`PENDING`, `CANCELLED`, `COMPLETED` for now — `CONFIRMED` waits for Payment Service in Phase 4), timestamps
-- [ ] Calls Hotel Service / Flight Service to check + hold availability (direct REST for now — see sequencing note above)
-- [ ] Concurrency handling — optimistic (`@Version`) or pessimistic locking so two travelers can't book the same room/seat at once
-- [ ] Cancellation (no refund logic yet — that's Payment's job in Phase 4)
-- [ ] Booking history endpoint (hotel + flight separately for now, matching the "My Trips" split from the requirements doc)
+
+**Part 1 — real overselling-protection on Hotel/Flight — ✅ done**, built ahead of Booking Service itself:
+- [x] Flight Service: `POST /flights/{flightId}/seats/{seatId}/reserve` / `.../release` — single atomic guarded `UPDATE`, no explicit locking needed (no date dimension)
+- [x] Hotel Service: `POST /hotels/{hotelId}/rooms/{roomId}/reserve` / `.../release` — pessimistic lock on the parent `Room` for the whole transaction, all-or-nothing check-then-write across every night in the stay
+- [x] Both TRAVELER-gated (`hasRole("TRAVELER")`, no ownership check) — Booking Service will forward the traveler's own JWT rather than use a special service-to-service credential
+- [x] `docs/api-reference.md` updated for both services; `CLAUDE.md` + `docs/architecture&logic.md` design rationale added
+
+**Part 2 — Booking Service itself:**
+- [ ] `Booking` entity — `id`, `travelerId`, `type` (`HOTEL`/`FLIGHT`), `status` (`PENDING`, `CANCELLED`, `COMPLETED` for now — `CONFIRMED` waits for Payment Service in Phase 4), `hotelId`/`roomId`/`checkInDate`/`checkOutDate` (nullable, HOTEL only), `flightId`/`flightSeatId` (nullable, FLIGHT only), `createdAt` — one entity, nullable-by-discriminator fields, same pattern `Account.partnerType` uses
+- [ ] Repository, Flyway migration, config/infra (port 8085), DTOs (`HotelBookingRequest`, `FlightBookingRequest`, `BookingResponse` — two creation endpoints, not one polymorphic request)
+- [ ] Own `JwtService`/`JwtAuthFilter` (no partner authority needed — traveler-only), fully-locked-down `SecurityConfig` like User Service
+- [ ] Internal HTTP client wrapping calls to Hotel/Flight's `reserve`/`release`, forwarding the caller's JWT — first real inter-service HTTP code in this project
+- [ ] `BookingService` — create (call reserve, save `PENDING` on success, clean `409` on failure), cancel (ownership + status check, call release, set `CANCELLED`), `getMyBookings`
+- [ ] Controller, exceptions + `GlobalExceptionHandler` (including a failed/unreachable outbound call to Hotel/Flight — new territory)
 - [ ] `docs/api-reference.md` Booking Service section
 
 ### 3.3 Service Discovery (Eureka)

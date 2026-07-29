@@ -146,6 +146,7 @@ Entities: `Hotel` (owned by a PARTNER account via `ownerId`, a partner may own m
 - `PARTNER_HOTEL` = `PARTNER` role **and** `partnerType: HOTEL` on the JWT (a `PARTNER_FLIGHT` account is rejected).
 - `(owner)` = ownership is checked in the service layer (JWT `sub` vs. `Hotel.ownerId`), not just role — a `PARTNER_HOTEL` token for a *different* hotel still gets `403`.
 - `Public (+owner)` = anyone can call it, but the owning partner's token unlocks extra data (inactive rows) the response otherwise omits.
+- `TRAVELER` (reserve/release only) = **not** an ownership check — any authenticated traveler can call these, since they're reserving inventory for themselves, not managing someone else's listing. Called by Booking Service, which forwards the original traveler's own JWT rather than using any special service-to-service credential.
 
 ### Hotels
 
@@ -168,6 +169,8 @@ Entities: `Hotel` (owned by a PARTNER account via `ownerId`, a partner may own m
 | PATCH | `/hotels/{hotelId}/rooms/{roomId}/status` | PARTNER_HOTEL (owner) | `UpdateActiveRequest` | `RoomResponse` |
 | GET | `/hotels/{hotelId}/rooms/{roomId}/availability` | PARTNER_HOTEL (owner) | — (query, required: `startDate`, `endDate`) | `List<AvailabilityResponse>` |
 | PUT | `/hotels/{hotelId}/rooms/{roomId}/availability` | PARTNER_HOTEL (owner) | `AvailabilityRangeRequest` | `List<AvailabilityResponse>` |
+| POST | `/hotels/{hotelId}/rooms/{roomId}/reserve` | TRAVELER | `ReserveRoomRequest` | `List<AvailabilityResponse>` |
+| POST | `/hotels/{hotelId}/rooms/{roomId}/release` | TRAVELER | `ReserveRoomRequest` | `List<AvailabilityResponse>` |
 
 ### Room Types (admin catalog)
 
@@ -276,6 +279,12 @@ Upserts one `Availability` row per date in `[startDate, endDate]` with the given
 ```
 The count already has the row-absence-means-default-available fallback applied — callers never need to know whether a given date had an explicit override row.
 
+### `ReserveRoomRequest` (`POST .../reserve` and `.../release`)
+```json
+{ "checkInDate": "2026-08-01", "checkOutDate": "2026-08-04" }
+```
+`checkOutDate` is exclusive, same semantics as `GET /hotels`' search filters — this reserves/releases every night in `[checkInDate, checkOutDate)`. `reserve` is all-or-nothing across the whole stay: if even one night in the range has no availability left, the entire call fails with `409` and nothing is decremented (checked under a lock on the parent `Room`, so a concurrent reserve/release for the same room can't interleave mid-check). `release` reverses it, capped so it can never push a night's count above the room's `totalInventory`.
+
 ### `UpdateActiveRequest` (shared by every `.../status` endpoint in this service)
 ```json
 { "active": false }
@@ -291,12 +300,13 @@ The plain create-time DTOs (`HotelRequest`/`RoomRequest`/`RoomTypeRequest`) are 
 
 Base URL: `http://localhost:8084` · Source: `flight-service/` · Package: `com.orbitra.flight_service`
 
-Entities: `Flight` (owned by a PARTNER account via `ownerId`, a partner may own many — **a single dated departure, not a recurring schedule**: same route on a different day is a different `Flight` row with its own unique `flightNumber`) → `FlightSeat` (a flight's own priced instance of a `SeatClass`, with `totalInventory` fixed by the partner and `availableCount` decremented only by future Booking Service — never partner-editable directly). `SeatClass` is a separate, admin-managed global catalog (e.g. "Business") partners pick from by id when adding a `FlightSeat`. No `Availability`/date-range table, unlike Hotel Service — a `Flight` is already pinned to one date, so there's no calendar to override. See `docs/architecture&logic.md` for the full design rationale.
+Entities: `Flight` (owned by a PARTNER account via `ownerId`, a partner may own many — **a single dated departure, not a recurring schedule**: same route on a different day is a different `Flight` row with its own unique `flightNumber`) → `FlightSeat` (a flight's own priced instance of a `SeatClass`, with `totalInventory` fixed by the partner and `availableCount` decremented only by the `reserve` endpoint below, called by Booking Service — never partner-editable directly). `SeatClass` is a separate, admin-managed global catalog (e.g. "Business") partners pick from by id when adding a `FlightSeat`. No `Availability`/date-range table, unlike Hotel Service — a `Flight` is already pinned to one date, so there's no calendar to override. See `docs/architecture&logic.md` for the full design rationale.
 
 **Role column notes specific to this service:**
 - `PARTNER_FLIGHT` = `PARTNER` role **and** `partnerType: FLIGHT` on the JWT (a `PARTNER_HOTEL` account is rejected).
 - `(owner)` = ownership is checked in the service layer (JWT `sub` vs. `Flight.ownerId`), not just role — a `PARTNER_FLIGHT` token for a *different* flight still gets `403`.
 - `Public (+owner)` = anyone can call it, but the owning partner's token unlocks extra data (inactive rows) the response otherwise omits.
+- `TRAVELER` (reserve/release only) = **not** an ownership check — any authenticated traveler can call these. Called by Booking Service, which forwards the original traveler's own JWT rather than using any special service-to-service credential.
 
 ### Flights
 
@@ -317,8 +327,12 @@ Entities: `Flight` (owned by a PARTNER account via `ownerId`, a partner may own 
 | POST | `/flights/{flightId}/seats` | PARTNER_FLIGHT (owner) | `FlightSeatRequest` | `FlightSeatResponse` |
 | PATCH | `/flights/{flightId}/seats/{seatId}` | PARTNER_FLIGHT (owner) | Partial JSON (see below) | `FlightSeatResponse` |
 | PATCH | `/flights/{flightId}/seats/{seatId}/status` | PARTNER_FLIGHT (owner) | `UpdateActiveRequest` | `FlightSeatResponse` |
+| POST | `/flights/{flightId}/seats/{seatId}/reserve` | TRAVELER | — | `FlightSeatResponse` |
+| POST | `/flights/{flightId}/seats/{seatId}/release` | TRAVELER | — | `FlightSeatResponse` |
 
-No availability-range endpoint here, unlike Hotel Service's `PUT .../rooms/{roomId}/availability` — `availableCount` only ever changes via a future booking, never a partner-submitted date range.
+No request body on `reserve`/`release` — there's only one seat to act on, identified entirely by the path. `reserve` atomically decrements `availableCount` by one and returns `409` if it was already `0`; `release` reverses it, capped so it can never push `availableCount` above `totalInventory`. Both are a single guarded `UPDATE` (`availableCount > 0` / `< totalInventory`), which is enough for concurrency safety here — no explicit locking needed, unlike Hotel Service's date-range version of the same idea.
+
+No availability-range endpoint here, unlike Hotel Service's `PUT .../rooms/{roomId}/availability` — `availableCount` only ever changes via `reserve`/`release` above, never a partner-submitted date range.
 
 ### Seat Classes (admin catalog)
 
