@@ -78,6 +78,14 @@ public class SecurityConfig {
                         //     RoomService, not here). ---
                         .requestMatchers(HttpMethod.GET, "/hotels/*/rooms").permitAll()
 
+                        // --- Reserve/release - TRAVELER only, called by Booking
+                        //     Service forwarding the traveler's own JWT (not the
+                        //     owning partner's). Must precede the partner-only
+                        //     blanket "/hotels/*/rooms/**" rule below, or that
+                        //     rule would shadow these and reject every traveler. ---
+                        .requestMatchers(HttpMethod.POST, "/hotels/*/rooms/*/reserve").hasRole("TRAVELER")
+                        .requestMatchers(HttpMethod.POST, "/hotels/*/rooms/*/release").hasRole("TRAVELER")
+
                         // --- Hotel/room/availability writes and the partner's
                         //     own availability calendar view - all partner-only,
                         //     no public GETs under a specific hotel's rooms ---

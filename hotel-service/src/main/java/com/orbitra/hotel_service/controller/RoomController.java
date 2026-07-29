@@ -9,6 +9,7 @@ package com.orbitra.hotel_service.controller;
 // ----------- IMPORTS -----------
 import com.orbitra.hotel_service.dto.AvailabilityRangeRequest;
 import com.orbitra.hotel_service.dto.AvailabilityResponse;
+import com.orbitra.hotel_service.dto.ReserveRoomRequest;
 import com.orbitra.hotel_service.dto.RoomRequest;
 import com.orbitra.hotel_service.dto.RoomResponse;
 import com.orbitra.hotel_service.dto.UpdateActiveRequest;
@@ -87,6 +88,22 @@ public class RoomController {
             @Valid @RequestBody AvailabilityRangeRequest request
     ) {
         return roomService.setAvailability(extractAccountId(authentication), hotelId, roomId, request);
+    }
+
+    // ------------------ Endpoint 7: Reserve a room for a stay (TRAVELER, called by Booking Service) -----------------
+    @PostMapping("/{roomId}/reserve")
+    public List<AvailabilityResponse> reserve(
+            @PathVariable Long hotelId, @PathVariable Long roomId, @Valid @RequestBody ReserveRoomRequest request
+    ) {
+        return roomService.reserve(hotelId, roomId, request.checkInDate(), request.checkOutDate());
+    }
+
+    // ------------------ Endpoint 8: Release a room for a stay (TRAVELER, called by Booking Service on cancel) -----------------
+    @PostMapping("/{roomId}/release")
+    public List<AvailabilityResponse> release(
+            @PathVariable Long hotelId, @PathVariable Long roomId, @Valid @RequestBody ReserveRoomRequest request
+    ) {
+        return roomService.release(hotelId, roomId, request.checkInDate(), request.checkOutDate());
     }
 
     private Long extractAccountId(Authentication authentication) {
