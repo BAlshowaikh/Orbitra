@@ -103,16 +103,18 @@
 - CRUD for listings (partner-side)
 - Search + filter + sort (traveler-side)
 - Availability management
-- Introduce **API Gateway** + **Service Discovery** here (once 2+ services exist, this becomes meaningful to practice)
-- Introduce caching (Redis) for search-heavy endpoints
+- Introduce caching (Redis) for search-heavy endpoints — timing TBD, revisit when it's actually needed
+- **API Gateway + Service Discovery moved later, see Phase 3 note below**
 
-### **Phase 3 — Booking**
-`Booking Service`
+### **Phase 3 — Booking, then Eureka + Gateway**
+`Booking Service` first, **then** `Service Discovery (Eureka)` + `API Gateway`
 - Reserve hotel room / flight seat
 - Booking history (hotel + flight separately for now)
 - Concurrency handling for inventory (optimistic/pessimistic locking on room/seat availability)
 - Booking status stays `PENDING`/`CANCELLED` only in this phase — `CONFIRMED`/refund-driven `CANCELLED` waits for Payment Service (Phase 5); the Saga/compensating-transaction work (release inventory hold on payment failure) is deferred along with it, since there's no payment leg yet to fail
-- **Frontend (Angular) build starts once this phase is done** — Auth/User/Hotel/Flight/Booking + Gateway + Eureka is enough surface area for a real demoable app, and there's no reason to gate frontend learning behind Payment/Packages
+- **Sequencing decision**: Booking Service is built *before* Eureka/Gateway exist, not after (a deliberate reorder from the original plan, which had Gateway+Eureka start in Phase 2). Reasoning: Eureka/Gateway are pure infrastructure with no user-facing payoff, while Booking is the actual core value and what unlocks starting the frontend — under time pressure, business logic wins over infra polish. Booking calls Hotel Service / Flight Service directly over plain REST at their Docker Compose hostnames (`http://hotel-service:8083`, `http://flight-service:8084`), and gets its own `JwtService`/`JwtAuthFilter` copy same as every other service so far.
+- **Known, accepted rework**: once Eureka + Gateway are built right after, Booking's direct REST calls get rewritten to Feign clients resolved via Eureka, and its own JWT validation gets removed in favor of the Gateway centralizing that (the same "real fix" already flagged as deferred since Hotel Service was built). This is expected throwaway work, not a mistake — the alternative (blocking Booking on Eureka/Gateway first) costs more time than the rewrite does.
+- **Frontend (Angular) build starts once Booking Service is done** — Auth/User/Hotel/Flight/Booking is enough surface area for a real demoable app; no need to wait for Eureka/Gateway to exist first, and definitely not for Payment/Packages.
 
 ### **Phase 4 — Engagement + Payment**
 `Payment Service` + `Review Service` + `Notification Service`
@@ -133,8 +135,8 @@
 - Revisit this phase only after Phases 1–4 are solid and there's time left — it's the most expensive addition for the least demo-critical payoff, since it's a composition on top of things that already work
 
 ### **Cross-Cutting (introduce progressively, not a separate phase)**
-- API Gateway — start Phase 2
-- Service Discovery — start Phase 2
+- API Gateway — Phase 3, after Booking Service (not Phase 2 — see Phase 3 note)
+- Service Discovery — Phase 3, after Booking Service, same reasoning
 - Circuit Breaker (Resilience4j) — start Phase 4, once services call each other synchronously
 - Message broker (Kafka/RabbitMQ) — start Phase 4 for booking/payment events, reused heavily in Phase 5
 - Centralized config/logging — whenever it starts getting annoying to manage manually (usually mid Phase 4)
@@ -144,7 +146,7 @@
 ## 6. Why This Order
 
 - Phase 1–2 give you working, demoable pieces before any distributed-transaction complexity.
-- Phase 3 (Booking alone) still teaches concurrency/inventory-locking without needing Payment to exist yet — and gives the frontend something real to call.
-- Frontend (Angular) starting after Phase 3 means it's learned in parallel with the harder backend phases rather than blocking on all of them first.
+- Phase 3 leads with Booking Service itself (direct REST calls, no Eureka/Gateway yet) rather than infrastructure first — it still teaches concurrency/inventory-locking without needing Payment to exist yet, and gives the frontend something real to call sooner. Eureka + Gateway follow immediately after, with Booking's inter-service calls and JWT handling deliberately rewritten once they exist, rather than blocking Booking on building them first.
+- Frontend (Angular) starting once Booking Service is done means it's learned in parallel with the harder backend phases rather than blocking on all of them first.
 - Phase 4 is where the remaining real microservices lessons live: payment, consistency, partial failure, the first Saga/compensating transaction.
 - Phase 5 (Packages) reuses everything from Phase 4 but forces you to orchestrate **two** services in one transaction instead of one — a natural step up in difficulty, not a jump. It's explicitly a stretch goal now, not a required phase.

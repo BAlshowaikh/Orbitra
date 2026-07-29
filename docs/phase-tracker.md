@@ -7,7 +7,7 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 ## Where we are now
 
 - **Done:** Auth Service, User Service, Hotel Service, Flight Service (app layer + docs complete for all four; only their own unit/integration tests are outstanding — tracked in `CLAUDE.md`, not duplicated here)
-- **In progress / up next:** Service Discovery (Eureka), then API Gateway, then Booking Service — see Phase 3 below
+- **In progress / up next:** Booking Service, then Service Discovery (Eureka), then API Gateway — see Phase 3 below
 
 ---
 
@@ -31,26 +31,29 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 - [x] Verified running both natively (`./mvnw spring-boot:run`) and via `docker compose up --build`
 - [ ] Unit/integration tests — still deferred, same as Hotel Service
 
-### 3.2 Service Discovery (Eureka)
-**Business goal:** none directly user-facing — this is infrastructure that makes the next steps (Gateway, and later Booking calling Hotel/Flight) possible without hardcoding ports/hostnames.
-- [ ] Eureka Server app (its own small Spring Boot project)
-- [ ] Register Auth, User, Hotel, Flight as Eureka clients
-
-### 3.3 API Gateway
-**Business goal:** one URL for the whole system instead of five different ports — the shape a real frontend or external client would expect.
-- [ ] Spring Cloud Gateway app
-- [ ] Route `/auth/**`, `/users/**`, `/hotels/**`, `/flights/**` (and later `/bookings/**`) via Eureka
-- [ ] Centralize JWT validation at the Gateway (replaces each service's own `JwtAuthFilter` copy — the "real fix" flagged as deferred since Hotel Service was built)
-- [ ] Decide/confirm: do individual services still validate as a defense-in-depth layer, or fully hand off to the Gateway? (Worth a deliberate decision, not a default)
-
-### 3.4 Booking Service
+### 3.2 Booking Service — up next
 **Business goal:** the actual "reserve this room / this seat" action — the core value proposition of a booking platform.
+
+**Sequencing note**: built *before* Eureka/Gateway exist (deliberately reordered — see `travel-platform-plan.md` §5/§6 for the full reasoning). Calls Hotel Service / Flight Service via plain REST at their Docker Compose hostnames (`http://hotel-service:8083`, `http://flight-service:8084`), and gets its own `JwtService`/`JwtAuthFilter` copy same as every other service so far. Both get deliberately rewritten once 3.3/3.4 below exist — known, accepted rework, not a mistake.
 - [ ] `Booking` entity — `id`, `userId`, `type` (`HOTEL`/`FLIGHT`), `referenceId`, `status` (`PENDING`, `CANCELLED`, `COMPLETED` for now — `CONFIRMED` waits for Payment Service in Phase 4), timestamps
-- [ ] Calls Hotel Service / Flight Service to check + hold availability (Feign client or direct REST — decide which, now that Eureka exists)
+- [ ] Calls Hotel Service / Flight Service to check + hold availability (direct REST for now — see sequencing note above)
 - [ ] Concurrency handling — optimistic (`@Version`) or pessimistic locking so two travelers can't book the same room/seat at once
 - [ ] Cancellation (no refund logic yet — that's Payment's job in Phase 4)
 - [ ] Booking history endpoint (hotel + flight separately for now, matching the "My Trips" split from the requirements doc)
 - [ ] `docs/api-reference.md` Booking Service section
+
+### 3.3 Service Discovery (Eureka)
+**Business goal:** none directly user-facing — this is infrastructure that makes the next step (Gateway) possible without hardcoding ports/hostnames.
+- [ ] Eureka Server app (its own small Spring Boot project)
+- [ ] Register Auth, User, Hotel, Flight, Booking as Eureka clients
+- [ ] Rewrite Booking's direct REST calls to Hotel/Flight as Feign clients resolved via Eureka
+
+### 3.4 API Gateway
+**Business goal:** one URL for the whole system instead of six different ports — the shape a real frontend or external client would expect.
+- [ ] Spring Cloud Gateway app
+- [ ] Route `/auth/**`, `/users/**`, `/hotels/**`, `/flights/**`, `/bookings/**` via Eureka
+- [ ] Centralize JWT validation at the Gateway (replaces each service's own `JwtAuthFilter` copy, including Booking's — the "real fix" flagged as deferred since Hotel Service was built)
+- [ ] Decide/confirm: do individual services still validate as a defense-in-depth layer, or fully hand off to the Gateway? (Worth a deliberate decision, not a default)
 
 **Definition of done for Phase 3:** a traveler can register, browse/search hotels and flights, reserve a room or seat, see it in their booking history, and cancel it — all through one Gateway URL — even though nothing is actually paid for yet.
 
