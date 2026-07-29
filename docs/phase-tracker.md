@@ -6,8 +6,8 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 
 ## Where we are now
 
-- **Done:** Auth Service, User Service, Hotel Service (app layer + docs complete; only its own unit/integration tests and Docker E2E verification are outstanding — tracked in `CLAUDE.md`, not duplicated here)
-- **In progress / up next:** Phase 3 below
+- **Done:** Auth Service, User Service, Hotel Service, Flight Service (app layer + docs complete for all four; only their own unit/integration tests are outstanding — tracked in `CLAUDE.md`, not duplicated here)
+- **In progress / up next:** Service Discovery (Eureka), then API Gateway, then Booking Service — see Phase 3 below
 
 ---
 
@@ -15,19 +15,21 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 
 **Business goal:** a traveler can search and reserve a hotel room or flight seat and see it in their booking history — the first "real" transaction in the system, even without money changing hands yet. This is also the phase that unlocks starting the Angular frontend, since it's the first point where there's a full demoable slice (register → browse → search → book).
 
-### 3.1 Flight Service
-- [ ] Entities: flight schedule, seat classes/pricing, availability (mirrors Hotel's `Hotel`→`Room`→`RoomType`/`Availability` shape, adapted to flights)
-- [ ] Repositories
-- [ ] Flyway migrations (one table per file, per this repo's convention)
-- [ ] `application.properties` + `.env`/`.env.example` + `docker-compose.yml` block + DB provisioning
-- [ ] DTOs
-- [ ] `JwtService`/`JwtAuthFilter` own copies, granting `PARTNER_FLIGHT` authority
-- [ ] `SecurityConfig` (public search/browse routes, same pattern as Hotel Service)
-- [ ] Services — CRUD + search/filter (traveler-side) + availability get/set (partner-side)
-- [ ] Ownership enforcement (JWT `sub` vs owning `Account`, same per-resource pattern as Hotel Service)
-- [ ] Controllers
-- [ ] `GlobalExceptionHandler` + custom exceptions
-- [ ] `docs/api-reference.md` Flight Service section
+### 3.1 Flight Service — ✅ done (built, running, documented)
+- [x] Entities: `SeatClass` (catalog) → `Flight` (single dated departure, not recurring) → `FlightSeat` (`totalInventory` + booking-driven `availableCount`). No `FlightAvailability` table — dropped mid-build once `Flight` was settled as one specific dated departure, not a Hotel-style recurring listing. See `CLAUDE.md`'s Architecture (flight-service) section and `docs/architecture&logic.md` for the full reasoning.
+- [x] Repositories
+- [x] Flyway migrations (one table per file: `seat_class`, `flight`, `flight_seat`, `flight_seat_facility` — one fewer than Hotel, no availability table)
+- [x] `application.properties` (port 8084) + `.env`/`.env.example` + `docker-compose.yml` block + `flight_service_db` provisioned and verified
+- [x] DTOs
+- [x] `JwtService`/`JwtAuthFilter` own copies, granting `PARTNER_FLIGHT` authority
+- [x] `SecurityConfig` (public search/browse routes, same pattern as Hotel Service)
+- [x] Services — `FlightService`/`SeatClassService`/`FlightSeatService`, incl. the `seatCount` ceiling check (sum of `FlightSeat.totalInventory` ≤ `Flight.seatCount`). No availability get/set endpoints, unlike Hotel — `availableCount` is booking-driven only, never partner-submitted.
+- [x] Ownership enforcement (JWT `sub` vs owning `Account`, same per-resource pattern as Hotel Service)
+- [x] Controllers
+- [x] `GlobalExceptionHandler` + custom exceptions
+- [x] `docs/api-reference.md` Flight Service section
+- [x] Verified running both natively (`./mvnw spring-boot:run`) and via `docker compose up --build`
+- [ ] Unit/integration tests — still deferred, same as Hotel Service
 
 ### 3.2 Service Discovery (Eureka)
 **Business goal:** none directly user-facing — this is infrastructure that makes the next steps (Gateway, and later Booking calling Hotel/Flight) possible without hardcoding ports/hostnames.
