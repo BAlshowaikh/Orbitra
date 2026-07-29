@@ -3,10 +3,10 @@
   Catches exceptions thrown anywhere in the web layer and turns them into a
   consistent JSON ErrorResponse instead of a raw stack trace / default 500.
 */
-package com.orbitra.hotel_service.exception;
+package com.orbitra.flight_service.exception;
 
 // ----------- IMPORTS -----------
-import com.orbitra.hotel_service.dto.ErrorResponse;
+import com.orbitra.flight_service.dto.ErrorResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -30,18 +30,18 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     // --- Not found (404) ---
-    @ExceptionHandler(HotelNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleHotelNotFound(HotelNotFoundException ex) {
+    @ExceptionHandler(FlightNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleFlightNotFound(FlightNotFoundException ex) {
         return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    @ExceptionHandler(RoomNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleRoomNotFound(RoomNotFoundException ex) {
+    @ExceptionHandler(FlightSeatNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleFlightSeatNotFound(FlightSeatNotFoundException ex) {
         return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
-    @ExceptionHandler(RoomTypeNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleRoomTypeNotFound(RoomTypeNotFoundException ex) {
+    @ExceptionHandler(SeatClassNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleSeatClassNotFound(SeatClassNotFoundException ex) {
         return buildResponse(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
@@ -52,24 +52,30 @@ public class GlobalExceptionHandler {
     }
 
     // --- Conflict (409) ---
-    @ExceptionHandler(DuplicateRoomTypeNameException.class)
-    public ResponseEntity<ErrorResponse> handleDuplicateRoomTypeName(DuplicateRoomTypeNameException ex) {
+    @ExceptionHandler(DuplicateSeatClassNameException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateSeatClassName(DuplicateSeatClassNameException ex) {
         return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
     }
 
-    @ExceptionHandler(DuplicateRoomException.class)
-    public ResponseEntity<ErrorResponse> handleDuplicateRoom(DuplicateRoomException ex) {
+    @ExceptionHandler(DuplicateFlightSeatException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateFlightSeat(DuplicateFlightSeatException ex) {
+        return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(DuplicateFlightNumberException.class)
+    public ResponseEntity<ErrorResponse> handleDuplicateFlightNumber(DuplicateFlightNumberException ex) {
         return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
     }
 
     // --- Bad input (400) ---
-    // Manual validation on JsonNode-bound merge-patch bodies (see each service's update()).
+    // Manual validation on JsonNode-bound merge-patch bodies (see each service's update()),
+    // plus the seatCount-ceiling checks in FlightService/FlightSeatService.
     @ExceptionHandler(InvalidRequestException.class)
     public ResponseEntity<ErrorResponse> handleInvalidRequest(InvalidRequestException ex) {
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
     }
 
-    // @Valid failures on HotelRequest/RoomRequest/RoomTypeRequest/UpdateActiveRequest/AvailabilityRangeRequest.
+    // @Valid failures on FlightRequest/FlightSeatRequest/SeatClassRequest/UpdateActiveRequest.
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()
@@ -85,7 +91,7 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.BAD_REQUEST, message);
     }
 
-    // A required @RequestParam (e.g. RoomController's startDate/endDate) was omitted.
+    // A required @RequestParam was omitted.
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ErrorResponse> handleMissingParameter(MissingServletRequestParameterException ex) {
         return buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage());

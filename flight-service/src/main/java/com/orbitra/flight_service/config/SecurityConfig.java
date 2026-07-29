@@ -1,16 +1,16 @@
 /*
   SecurityConfig.java
-  Configures the Spring Security filter chain for Hotel Service: stateless
+  Configures the Spring Security filter chain for Flight Service: stateless
   sessions (no HttpSession, no cookies), CSRF disabled (meaningless without
-  session cookies to forge). Unlike user-service, this service has public
+  session cookies to forge). Like hotel-service, this service has public
   routes (browsing/search, GUEST role) alongside partner-only and admin-only
-  ones - the first service with that mix since auth-service.
+  ones.
 */
-package com.orbitra.hotel_service.config;
+package com.orbitra.flight_service.config;
 
 // ------------- IMPORTS -------------
-import com.orbitra.hotel_service.security.JwtAuthFilter;
-import com.orbitra.hotel_service.security.RestAccessDeniedHandler;
+import com.orbitra.flight_service.security.JwtAuthFilter;
+import com.orbitra.flight_service.security.RestAccessDeniedHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -42,52 +42,53 @@ public class SecurityConfig {
                 // Stateless: no HttpSession, no cookies - every request proves its own identity
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // Order matters - first match wins, so more specific rules
-                // (GET /hotels/mine, PATCH .../status) must come before the
-                // generic single-segment GET /hotels/{id} rule they'd
+                // (GET /flights/mine, PATCH .../status) must come before the
+                // generic single-segment GET /flights/{id} rule they'd
                 // otherwise be shadowed by or shadow.
                 .authorizeHttpRequests(auth -> auth
                         // --- Public (GUEST) - browsing/search only ---
-                        // No separate /search sub-route - GET /hotels IS the
-                        // list, with every filter (city, dates, price, guests)
-                        // as an optional query param. No filters = browse all
-                        // active hotels; any combination narrows the results.
-                        .requestMatchers(HttpMethod.GET, "/hotels").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/room-types").permitAll()
+                        // No separate /search sub-route - GET /flights IS the
+                        // list, with every filter (origin, destination, date,
+                        // passengers, seat class, price) as an optional query
+                        // param. No filters = browse all active flights; any
+                        // combination narrows the results.
+                        .requestMatchers(HttpMethod.GET, "/flights").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/seat-classes").permitAll()
 
                         // --- Partner's own management views/actions ---
-                        // Must precede the generic GET /hotels/{id} rule below,
+                        // Must precede the generic GET /flights/{id} rule below,
                         // since "mine" would otherwise match that {id} placeholder.
-                        .requestMatchers(HttpMethod.GET, "/hotels/mine").hasAuthority("PARTNER_HOTEL")
+                        .requestMatchers(HttpMethod.GET, "/flights/mine").hasAuthority("PARTNER_FLIGHT")
 
-                        // --- Public hotel detail view ---
+                        // --- Public flight detail view ---
                         // Single path segment only - does not match deeper paths
-                        // like /hotels/{id}/rooms/**, so it can't accidentally
-                        // expose the partner-only room/availability routes below.
-                        .requestMatchers(HttpMethod.GET, "/hotels/{id}").permitAll()
+                        // like /flights/{id}/seats/**, so it can't accidentally
+                        // expose the partner-only seat routes below.
+                        .requestMatchers(HttpMethod.GET, "/flights/{id}").permitAll()
 
-                        // --- Hotel status: partner (own listing) or admin (moderation) ---
+                        // --- Flight status: partner (own listing) or admin (moderation) ---
                         // Ownership vs. admin-bypass is enforced in the service
                         // layer, not here - this rule only gates who may attempt it.
-                        .requestMatchers(HttpMethod.PATCH, "/hotels/{id}/status")
-                        .hasAnyAuthority("PARTNER_HOTEL", "ROLE_ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/flights/{id}/status")
+                        .hasAnyAuthority("PARTNER_FLIGHT", "ROLE_ADMIN")
 
-                        // --- List a hotel's rooms - public, but must precede
+                        // --- List a flight's seats - public, but must precede
                         //     the partner-only blanket rule below or it would
-                        //     be shadowed by it. Owner sees inactive rooms too;
+                        //     be shadowed by it. Owner sees inactive seats too;
                         //     everyone else only sees active ones (enforced in
-                        //     RoomService, not here). ---
-                        .requestMatchers(HttpMethod.GET, "/hotels/*/rooms").permitAll()
+                        //     FlightSeatService, not here). ---
+                        .requestMatchers(HttpMethod.GET, "/flights/*/seats").permitAll()
 
-                        // --- Hotel/room/availability writes and the partner's
-                        //     own availability calendar view - all partner-only,
-                        //     no public GETs under a specific hotel's rooms ---
-                        .requestMatchers(HttpMethod.POST, "/hotels").hasAuthority("PARTNER_HOTEL")
-                        .requestMatchers(HttpMethod.PATCH, "/hotels/{id}").hasAuthority("PARTNER_HOTEL")
-                        .requestMatchers("/hotels/*/rooms/**").hasAuthority("PARTNER_HOTEL")
+                        // --- Flight/seat writes - all partner-only, no public
+                        //     GETs under a specific flight's seats beyond the
+                        //     list route above ---
+                        .requestMatchers(HttpMethod.POST, "/flights").hasAuthority("PARTNER_FLIGHT")
+                        .requestMatchers(HttpMethod.PATCH, "/flights/{id}").hasAuthority("PARTNER_FLIGHT")
+                        .requestMatchers("/flights/*/seats/**").hasAuthority("PARTNER_FLIGHT")
 
-                        // --- Room type catalog - admin-managed, GET already
+                        // --- Seat class catalog - admin-managed, GET already
                         //     covered above, everything else (create/update/status) ---
-                        .requestMatchers("/room-types/**").hasRole("ADMIN")
+                        .requestMatchers("/seat-classes/**").hasRole("ADMIN")
 
                         // Everything else just requires authentication.
                         .anyRequest().authenticated()

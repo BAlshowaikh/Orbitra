@@ -112,7 +112,18 @@ public class RoomService {
         return toResponse(room);
     }
 
-    // ---------------- METHOD 4: Get a room's availability calendar (owner only) ----------------
+    // ---------------- METHOD 4: List a hotel's rooms (public, owner sees inactive too) ----------------
+    @Transactional(readOnly = true)
+    public List<RoomResponse> getRooms(Long callerId, Long hotelId) {
+        Hotel hotel = hotelRepository.findById(hotelId)
+                .orElseThrow(() -> new HotelNotFoundException("Hotel not found: " + hotelId));
+
+        boolean isOwner = callerId != null && hotel.getOwnerId().equals(callerId);
+        List<Room> rooms = isOwner ? roomRepository.findByHotelId(hotelId) : roomRepository.findByHotelIdAndActiveTrue(hotelId);
+        return rooms.stream().map(this::toResponse).toList();
+    }
+
+    // ---------------- METHOD 5: Get a room's availability calendar (owner only) ----------------
     @Transactional(readOnly = true)
     public List<AvailabilityResponse> getAvailability(Long callerId, Long hotelId, Long roomId, LocalDate startDate, LocalDate endDate) {
         Room room = getOwnedRoom(hotelId, roomId, callerId);
@@ -125,7 +136,7 @@ public class RoomService {
         return result;
     }
 
-    // ---------------- METHOD 5: Set a room's availability for a date range (owner only) ----------------
+    // ---------------- METHOD 6: Set a room's availability for a date range (owner only) ----------------
     @Transactional
     public List<AvailabilityResponse> setAvailability(Long callerId, Long hotelId, Long roomId, AvailabilityRangeRequest request) {
         Room room = getOwnedRoom(hotelId, roomId, callerId);

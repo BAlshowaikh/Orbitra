@@ -138,11 +138,305 @@ Notes:
 
 ## Hotel Service
 
-*Not yet built.*
+Base URL: `http://localhost:8083` · Source: `hotel-service/` · Package: `com.orbitra.hotel_service`
+
+Entities: `Hotel` (owned by a PARTNER account via `ownerId`, a partner may own many) → `Room` (a hotel's own priced/staffed instance of a `RoomType`) → `Availability` (per-room, per-date override; a missing row means "fully available," i.e. `COALESCE(row's availableCount, room.totalInventory)`). `RoomType` is a separate, admin-managed global catalog (e.g. "Deluxe King") partners pick from by id when adding a `Room`.
+
+**Role column notes specific to this service:**
+- `PARTNER_HOTEL` = `PARTNER` role **and** `partnerType: HOTEL` on the JWT (a `PARTNER_FLIGHT` account is rejected).
+- `(owner)` = ownership is checked in the service layer (JWT `sub` vs. `Hotel.ownerId`), not just role — a `PARTNER_HOTEL` token for a *different* hotel still gets `403`.
+- `Public (+owner)` = anyone can call it, but the owning partner's token unlocks extra data (inactive rows) the response otherwise omits.
+
+### Hotels
+
+| Method | Path | Role | Request body | Response body |
+|---|---|---|---|---|
+| GET | `/hotels` | Public | — (query: `city`, `checkIn`, `checkOut`, `guests`, `minPrice`, `maxPrice`, `page`, `size`, all optional) | `PagedResponse<HotelSearchResultResponse>` |
+| GET | `/hotels/mine` | PARTNER_HOTEL | — (query: `page`, `size`) | `PagedResponse<HotelResponse>` |
+| GET | `/hotels/{id}` | Public | — | `HotelDetailResponse` |
+| POST | `/hotels` | PARTNER_HOTEL | `HotelRequest` | `HotelResponse` |
+| PATCH | `/hotels/{id}` | PARTNER_HOTEL (owner) | Partial JSON (see below) | `HotelResponse` |
+| PATCH | `/hotels/{id}/status` | PARTNER_HOTEL (owner) or ADMIN | `UpdateActiveRequest` | `HotelResponse` |
+
+### Rooms (nested under a hotel)
+
+| Method | Path | Role | Request body | Response body |
+|---|---|---|---|---|
+| GET | `/hotels/{hotelId}/rooms` | Public (+owner) | — | `List<RoomResponse>` |
+| POST | `/hotels/{hotelId}/rooms` | PARTNER_HOTEL (owner) | `RoomRequest` | `RoomResponse` |
+| PATCH | `/hotels/{hotelId}/rooms/{roomId}` | PARTNER_HOTEL (owner) | Partial JSON (see below) | `RoomResponse` |
+| PATCH | `/hotels/{hotelId}/rooms/{roomId}/status` | PARTNER_HOTEL (owner) | `UpdateActiveRequest` | `RoomResponse` |
+| GET | `/hotels/{hotelId}/rooms/{roomId}/availability` | PARTNER_HOTEL (owner) | — (query, required: `startDate`, `endDate`) | `List<AvailabilityResponse>` |
+| PUT | `/hotels/{hotelId}/rooms/{roomId}/availability` | PARTNER_HOTEL (owner) | `AvailabilityRangeRequest` | `List<AvailabilityResponse>` |
+
+### Room Types (admin catalog)
+
+| Method | Path | Role | Request body | Response body |
+|---|---|---|---|---|
+| GET | `/room-types` | Public (+admin) | — | `List<RoomTypeResponse>` |
+| POST | `/room-types` | ADMIN | `RoomTypeRequest` | `RoomTypeResponse` |
+| PATCH | `/room-types/{id}` | ADMIN | Partial JSON (see below) | `RoomTypeResponse` |
+| PATCH | `/room-types/{id}/status` | ADMIN | `UpdateActiveRequest` | `RoomTypeResponse` |
+
+### `HotelRequest` (create only — `POST /hotels`)
+```json
+{
+  "name": "Grand Plaza Hotel",
+  "description": "A luxury hotel in the city center",
+  "address": "123 Main St",
+  "city": "Dubai",
+  "country": "UAE",
+  "amenities": ["pool", "gym", "free wifi"]
+}
+```
+
+### `HotelResponse`
+```json
+{
+  "id": 1,
+  "ownerId": 7,
+  "name": "Grand Plaza Hotel",
+  "description": "A luxury hotel in the city center",
+  "address": "123 Main St",
+  "city": "Dubai",
+  "country": "UAE",
+  "amenities": ["pool", "gym", "free wifi"],
+  "active": true,
+  "createdAt": "2026-07-20T10:00:00Z"
+}
+```
+
+### `HotelSearchResultResponse` (thinner than `HotelResponse` — one card per search result)
+```json
+{ "id": 1, "name": "Grand Plaza Hotel", "city": "Dubai", "country": "UAE", "minNightlyPrice": 150.00 }
+```
+`minNightlyPrice` is the cheapest active `Room`'s price at that hotel, `null` if it has no active rooms yet.
+
+### `HotelDetailResponse`
+```json
+{
+  "id": 1,
+  "name": "Grand Plaza Hotel",
+  "description": "A luxury hotel in the city center",
+  "address": "123 Main St",
+  "city": "Dubai",
+  "country": "UAE",
+  "amenities": ["pool", "gym", "free wifi"],
+  "rooms": [ /* array of RoomResponse, active only */ ]
+}
+```
+
+### `RoomRequest` (create only — `POST /hotels/{hotelId}/rooms`)
+```json
+{
+  "roomTypeId": 1,
+  "capacity": 2,
+  "basePricePerNight": 150.00,
+  "totalInventory": 10,
+  "facilities": ["WiFi", "TV", "Balcony"]
+}
+```
+`roomTypeId` must reference an active `RoomType`; a hotel can only have one `Room` per `RoomType` (`409` on a duplicate).
+
+### `RoomResponse`
+```json
+{
+  "id": 5,
+  "hotelId": 1,
+  "roomTypeId": 1,
+  "roomTypeName": "Deluxe King",
+  "capacity": 2,
+  "basePricePerNight": 150.00,
+  "totalInventory": 10,
+  "facilities": ["WiFi", "TV", "Balcony"],
+  "active": true
+}
+```
+
+### `RoomTypeRequest` (create only — `POST /room-types`)
+```json
+{ "name": "Deluxe King", "description": "A spacious room with a king-size bed" }
+```
+`name` must be unique (`409` on a duplicate).
+
+### `RoomTypeResponse`
+```json
+{ "id": 1, "name": "Deluxe King", "description": "A spacious room with a king-size bed", "active": true }
+```
+
+### `AvailabilityRangeRequest` (`PUT .../availability`)
+```json
+{ "startDate": "2026-08-01", "endDate": "2026-08-07", "availableCount": 5 }
+```
+Upserts one `Availability` row per date in `[startDate, endDate]` with the given count — full-replace, not merge-patch (every field is required, so there's no omitted-field ambiguity). Range capped at 366 days per request.
+
+### `AvailabilityResponse`
+```json
+{ "date": "2026-08-01", "availableCount": 5 }
+```
+The count already has the row-absence-means-default-available fallback applied — callers never need to know whether a given date had an explicit override row.
+
+### `UpdateActiveRequest` (shared by every `.../status` endpoint in this service)
+```json
+{ "active": false }
+```
+
+**Partial-update semantics** (`PATCH /hotels/{id}`, `PATCH .../rooms/{roomId}`, `PATCH /room-types/{id}`): every field is optional and only changes if present in the request JSON — omitted means "leave unchanged," same convention as `user-service`'s `PUT /users/profile`. Unlike `user-service`, there's no field that's *always* required on every call — string fields are still validated non-blank if you do send them. Example: updating just a hotel's address —
+```json
+{ "address": "456 New St" }
+```
+The plain create-time DTOs (`HotelRequest`/`RoomRequest`/`RoomTypeRequest`) are not bound on these `PATCH` routes; the body is read as a raw JSON object instead.
 
 ## Flight Service
 
-*Not yet built.*
+Base URL: `http://localhost:8084` · Source: `flight-service/` · Package: `com.orbitra.flight_service`
+
+Entities: `Flight` (owned by a PARTNER account via `ownerId`, a partner may own many — **a single dated departure, not a recurring schedule**: same route on a different day is a different `Flight` row with its own unique `flightNumber`) → `FlightSeat` (a flight's own priced instance of a `SeatClass`, with `totalInventory` fixed by the partner and `availableCount` decremented only by future Booking Service — never partner-editable directly). `SeatClass` is a separate, admin-managed global catalog (e.g. "Business") partners pick from by id when adding a `FlightSeat`. No `Availability`/date-range table, unlike Hotel Service — a `Flight` is already pinned to one date, so there's no calendar to override. See `docs/architecture&logic.md` for the full design rationale.
+
+**Role column notes specific to this service:**
+- `PARTNER_FLIGHT` = `PARTNER` role **and** `partnerType: FLIGHT` on the JWT (a `PARTNER_HOTEL` account is rejected).
+- `(owner)` = ownership is checked in the service layer (JWT `sub` vs. `Flight.ownerId`), not just role — a `PARTNER_FLIGHT` token for a *different* flight still gets `403`.
+- `Public (+owner)` = anyone can call it, but the owning partner's token unlocks extra data (inactive rows) the response otherwise omits.
+
+### Flights
+
+| Method | Path | Role | Request body | Response body |
+|---|---|---|---|---|
+| GET | `/flights` | Public | — (query: `originCode`, `destinationCode`, `travelDate`, `passengers`, `seatClassName`, `minPrice`, `maxPrice`, `page`, `size`, all optional) | `PagedResponse<FlightSearchResultResponse>` |
+| GET | `/flights/mine` | PARTNER_FLIGHT | — (query: `page`, `size`) | `PagedResponse<FlightResponse>` |
+| GET | `/flights/{id}` | Public | — | `FlightDetailResponse` |
+| POST | `/flights` | PARTNER_FLIGHT | `FlightRequest` | `FlightResponse` |
+| PATCH | `/flights/{id}` | PARTNER_FLIGHT (owner) | Partial JSON (see below) | `FlightResponse` |
+| PATCH | `/flights/{id}/status` | PARTNER_FLIGHT (owner) or ADMIN | `UpdateActiveRequest` | `FlightResponse` |
+
+### Flight Seats (nested under a flight)
+
+| Method | Path | Role | Request body | Response body |
+|---|---|---|---|---|
+| GET | `/flights/{flightId}/seats` | Public (+owner) | — | `List<FlightSeatResponse>` |
+| POST | `/flights/{flightId}/seats` | PARTNER_FLIGHT (owner) | `FlightSeatRequest` | `FlightSeatResponse` |
+| PATCH | `/flights/{flightId}/seats/{seatId}` | PARTNER_FLIGHT (owner) | Partial JSON (see below) | `FlightSeatResponse` |
+| PATCH | `/flights/{flightId}/seats/{seatId}/status` | PARTNER_FLIGHT (owner) | `UpdateActiveRequest` | `FlightSeatResponse` |
+
+No availability-range endpoint here, unlike Hotel Service's `PUT .../rooms/{roomId}/availability` — `availableCount` only ever changes via a future booking, never a partner-submitted date range.
+
+### Seat Classes (admin catalog)
+
+| Method | Path | Role | Request body | Response body |
+|---|---|---|---|---|
+| GET | `/seat-classes` | Public (+admin) | — | `List<SeatClassResponse>` |
+| POST | `/seat-classes` | ADMIN | `SeatClassRequest` | `SeatClassResponse` |
+| PATCH | `/seat-classes/{id}` | ADMIN | Partial JSON (see below) | `SeatClassResponse` |
+| PATCH | `/seat-classes/{id}/status` | ADMIN | `UpdateActiveRequest` | `SeatClassResponse` |
+
+### `FlightRequest` (create only — `POST /flights`)
+```json
+{
+  "flightNumber": "AA100-20260805",
+  "originCode": "JFK",
+  "destinationCode": "LAX",
+  "departureTime": "2026-08-05T08:00:00",
+  "arrivalTime": "2026-08-05T11:00:00",
+  "durationMinutes": 360,
+  "seatCount": 150
+}
+```
+`flightNumber` must be unique (`409` on a duplicate) — since a `Flight` is one specific dated departure, the same route on a different day needs a different number. `seatCount` is the aircraft's total physical capacity; the sum of every linked `FlightSeat.totalInventory` must never exceed it (`400` if a create/update would push it over).
+
+### `FlightResponse`
+```json
+{
+  "id": 1,
+  "ownerId": 7,
+  "flightNumber": "AA100-20260805",
+  "originCode": "JFK",
+  "destinationCode": "LAX",
+  "departureTime": "2026-08-05T08:00:00",
+  "arrivalTime": "2026-08-05T11:00:00",
+  "durationMinutes": 360,
+  "seatCount": 150,
+  "active": true,
+  "createdAt": "2026-07-28T10:00:00Z"
+}
+```
+
+### `FlightSearchResultResponse` (thinner than `FlightResponse` — one card per search result)
+```json
+{
+  "id": 1,
+  "flightNumber": "AA100-20260805",
+  "originCode": "JFK",
+  "destinationCode": "LAX",
+  "departureTime": "2026-08-05T08:00:00",
+  "arrivalTime": "2026-08-05T11:00:00",
+  "minPrice": 89.99
+}
+```
+`minPrice` is the cheapest active `FlightSeat`'s price on that flight, `null` if it has no active seats yet. `travelDate` in search filters by a single day (a `Flight` is already one specific dated departure), not a check-in/check-out range like Hotel Service.
+
+### `FlightDetailResponse`
+```json
+{
+  "id": 1,
+  "flightNumber": "AA100-20260805",
+  "originCode": "JFK",
+  "destinationCode": "LAX",
+  "departureTime": "2026-08-05T08:00:00",
+  "arrivalTime": "2026-08-05T11:00:00",
+  "durationMinutes": 360,
+  "seats": [ /* array of FlightSeatResponse, active only */ ]
+}
+```
+No `amenities` field, unlike `HotelDetailResponse` — this service has no flight-level amenities table (see architecture doc).
+
+### `FlightSeatRequest` (create only — `POST /flights/{flightId}/seats`)
+```json
+{
+  "seatClassId": 1,
+  "basePricePerSeat": 89.99,
+  "totalInventory": 30,
+  "facilities": ["extra legroom", "meal included"]
+}
+```
+`seatClassId` must reference an active `SeatClass`; a flight can only have one `FlightSeat` per `SeatClass` (`409` on a duplicate). No `capacity` field, unlike `RoomRequest` — a seat always holds exactly one passenger.
+
+### `FlightSeatResponse`
+```json
+{
+  "id": 5,
+  "flightId": 1,
+  "seatClassId": 1,
+  "seatClassName": "Business",
+  "basePricePerSeat": 89.99,
+  "totalInventory": 30,
+  "availableCount": 30,
+  "facilities": ["extra legroom", "meal included"],
+  "active": true
+}
+```
+`availableCount` starts equal to `totalInventory` and is booking-driven only from then on — there's no field on `FlightSeatRequest`/the partial-update body to set it directly.
+
+### `SeatClassRequest` (create only — `POST /seat-classes`)
+```json
+{ "name": "Business", "description": "Wider seats, priority boarding" }
+```
+`name` must be unique (`409` on a duplicate).
+
+### `SeatClassResponse`
+```json
+{ "id": 1, "name": "Business", "description": "Wider seats, priority boarding", "active": true }
+```
+
+### `UpdateActiveRequest` (shared by every `.../status` endpoint in this service)
+```json
+{ "active": false }
+```
+
+**Partial-update semantics** (`PATCH /flights/{id}`, `PATCH .../seats/{seatId}`, `PATCH /seat-classes/{id}`): every field is optional and only changes if present in the request JSON — omitted means "leave unchanged," same convention as Hotel Service. Example: updating just a flight's seat count —
+```json
+{ "seatCount": 180 }
+```
+`seatCount` cannot be lowered below what's already allocated across the flight's seat classes (`400`). The plain create-time DTOs (`FlightRequest`/`FlightSeatRequest`/`SeatClassRequest`) are not bound on these `PATCH` routes; the body is read as a raw JSON object instead.
 
 ## Booking Service
 
