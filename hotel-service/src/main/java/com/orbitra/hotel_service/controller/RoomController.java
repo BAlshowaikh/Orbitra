@@ -10,6 +10,7 @@ package com.orbitra.hotel_service.controller;
 import com.orbitra.hotel_service.dto.AvailabilityRangeRequest;
 import com.orbitra.hotel_service.dto.AvailabilityResponse;
 import com.orbitra.hotel_service.dto.ReserveRoomRequest;
+import com.orbitra.hotel_service.dto.ReserveRoomResponse;
 import com.orbitra.hotel_service.dto.RoomRequest;
 import com.orbitra.hotel_service.dto.RoomResponse;
 import com.orbitra.hotel_service.dto.UpdateActiveRequest;
@@ -92,7 +93,7 @@ public class RoomController {
 
     // ------------------ Endpoint 7: Reserve a room for a stay (TRAVELER, called by Booking Service) -----------------
     @PostMapping("/{roomId}/reserve")
-    public List<AvailabilityResponse> reserve(
+    public ReserveRoomResponse reserve(
             @PathVariable Long hotelId, @PathVariable Long roomId, @Valid @RequestBody ReserveRoomRequest request
     ) {
         return roomService.reserve(hotelId, roomId, request.checkInDate(), request.checkOutDate());

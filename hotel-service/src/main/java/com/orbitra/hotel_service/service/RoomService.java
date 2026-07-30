@@ -9,6 +9,7 @@ package com.orbitra.hotel_service.service;
 import com.orbitra.hotel_service.dto.AvailabilityRangeRequest;
 import com.orbitra.hotel_service.dto.AvailabilityResponse;
 import com.orbitra.hotel_service.dto.RoomRequest;
+import com.orbitra.hotel_service.dto.ReserveRoomResponse;
 import com.orbitra.hotel_service.dto.RoomResponse;
 import com.orbitra.hotel_service.exception.DuplicateRoomException;
 import com.orbitra.hotel_service.exception.ForbiddenException;
@@ -167,7 +168,7 @@ public class RoomService {
     // the owning partner, it's a traveler booking a room. Authorization is
     // just "authenticated as TRAVELER", enforced in SecurityConfig instead.
     @Transactional
-    public List<AvailabilityResponse> reserve(Long hotelId, Long roomId, LocalDate checkInDate, LocalDate checkOutDate) {
+    public ReserveRoomResponse reserve(Long hotelId, Long roomId, LocalDate checkInDate, LocalDate checkOutDate) {
         // Locks the Room row for this whole transaction - see
         // RoomRepository.findByIdForUpdate for why this (not a per-date lock)
         // is what actually makes the check-then-write below safe.
@@ -192,7 +193,7 @@ public class RoomService {
             availabilityRepository.save(row);
             result.add(new AvailabilityResponse(date, row.getAvailableCount()));
         }
-        return result;
+        return new ReserveRoomResponse(room.getBasePricePerNight(), result);
     }
 
     // ---------------- METHOD 8: Release a room for a stay (called by Booking Service, on cancellation) ----------------
