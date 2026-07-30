@@ -6,8 +6,8 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 
 ## Where we are now
 
-- **Done:** Auth Service, User Service, Hotel Service, Flight Service (app layer + docs complete for all four; only their own unit/integration tests are outstanding — tracked in `CLAUDE.md`, not duplicated here)
-- **In progress / up next:** Booking Service, then Service Discovery (Eureka), then API Gateway — see Phase 3 below
+- **Done:** Auth Service, User Service, Hotel Service, Flight Service, Booking Service (app layer + docs complete for all five, incl. Hotel/Flight's `reserve`/`release` endpoints; only unit/integration tests are outstanding across the board — tracked in `CLAUDE.md`, not duplicated here)
+- **In progress / up next:** Service Discovery (Eureka), then API Gateway — see Phase 3 below
 
 ---
 
@@ -31,25 +31,31 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 - [x] Verified running both natively (`./mvnw spring-boot:run`) and via `docker compose up --build`
 - [ ] Unit/integration tests — still deferred, same as Hotel Service
 
-### 3.2 Booking Service — up next
+### 3.2 Booking Service — ✅ done (built, running, documented)
 **Business goal:** the actual "reserve this room / this seat" action — the core value proposition of a booking platform.
 
-**Sequencing note**: built *before* Eureka/Gateway exist (deliberately reordered — see `travel-platform-plan.md` §5/§6 for the full reasoning). Calls Hotel Service / Flight Service via plain REST at their Docker Compose hostnames (`http://hotel-service:8083`, `http://flight-service:8084`), and gets its own `JwtService`/`JwtAuthFilter` copy same as every other service so far. Both get deliberately rewritten once 3.3/3.4 below exist — known, accepted rework, not a mistake.
+**Sequencing note**: built *before* Eureka/Gateway exist (deliberately reordered — see `travel-platform-plan.md` §5/§6 for the full reasoning). Calls Hotel Service / Flight Service via plain REST (own `HotelServiceClient`/`FlightServiceClient`, native URLs by default, Docker Compose hostnames when containerized), and has its own `JwtService`/`JwtAuthFilter` copy same as every other service so far. Both get deliberately rewritten once 3.3/3.4 below exist — known, accepted rework, not a mistake.
 
 **Part 1 — real overselling-protection on Hotel/Flight — ✅ done**, built ahead of Booking Service itself:
 - [x] Flight Service: `POST /flights/{flightId}/seats/{seatId}/reserve` / `.../release` — single atomic guarded `UPDATE`, no explicit locking needed (no date dimension)
-- [x] Hotel Service: `POST /hotels/{hotelId}/rooms/{roomId}/reserve` / `.../release` — pessimistic lock on the parent `Room` for the whole transaction, all-or-nothing check-then-write across every night in the stay
-- [x] Both TRAVELER-gated (`hasRole("TRAVELER")`, no ownership check) — Booking Service will forward the traveler's own JWT rather than use a special service-to-service credential
+- [x] Hotel Service: `POST /hotels/{hotelId}/rooms/{roomId}/reserve` / `.../release` — pessimistic lock on the parent `Room` for the whole transaction, all-or-nothing check-then-write across every night in the stay. `reserve` returns `ReserveRoomResponse` (price + nights), not the bare list, so Booking Service can compute `totalPrice` without a second call.
+- [x] Both TRAVELER-gated (`hasRole("TRAVELER")`, no ownership check) — Booking Service forwards the traveler's own JWT rather than using a special service-to-service credential
 - [x] `docs/api-reference.md` updated for both services; `CLAUDE.md` + `docs/architecture&logic.md` design rationale added
 
-**Part 2 — Booking Service itself:**
-- [ ] `Booking` entity — `id`, `travelerId`, `type` (`HOTEL`/`FLIGHT`), `status` (`PENDING`, `CANCELLED`, `COMPLETED` for now — `CONFIRMED` waits for Payment Service in Phase 4), `hotelId`/`roomId`/`checkInDate`/`checkOutDate` (nullable, HOTEL only), `flightId`/`flightSeatId` (nullable, FLIGHT only), `createdAt` — one entity, nullable-by-discriminator fields, same pattern `Account.partnerType` uses
-- [ ] Repository, Flyway migration, config/infra (port 8085), DTOs (`HotelBookingRequest`, `FlightBookingRequest`, `BookingResponse` — two creation endpoints, not one polymorphic request)
-- [ ] Own `JwtService`/`JwtAuthFilter` (no partner authority needed — traveler-only), fully-locked-down `SecurityConfig` like User Service
-- [ ] Internal HTTP client wrapping calls to Hotel/Flight's `reserve`/`release`, forwarding the caller's JWT — first real inter-service HTTP code in this project
-- [ ] `BookingService` — create (call reserve, save `PENDING` on success, clean `409` on failure), cancel (ownership + status check, call release, set `CANCELLED`), `getMyBookings`
-- [ ] Controller, exceptions + `GlobalExceptionHandler` (including a failed/unreachable outbound call to Hotel/Flight — new territory)
-- [ ] `docs/api-reference.md` Booking Service section
+**Part 2 — Booking Service itself — ✅ done:**
+- [x] Entities — **revised mid-build**: not a single `Booking` table with nullable fields as originally planned, but **JOINED JPA inheritance** (Class Table Inheritance) instead: abstract `Booking` (shared table: `travelerId`, `status`, `totalPrice`, `createdAt`) → concrete `HotelBooking`/`FlightBooking` extension tables, each with only its own real fields, zero nulls either way. `totalPrice` added mid-build too (missing from the original plan) — snapshotted once at creation, never recomputed. See `CLAUDE.md`/`docs/architecture&logic.md` and `docs/springboot-java-notes.md` §18 (sealed interfaces) for the full reasoning.
+- [x] Repositories — `BookingRepository` (abstract, unified queries), `HotelBookingRepository`/`FlightBookingRepository` (concrete, type-scoped)
+- [x] Flyway migrations — `booking` (parent) → `hotel_booking` → `flight_booking`, each child's `id` a FK back to `booking(id)`, not its own sequence
+- [x] `application.properties` (port 8085) + `.env`/`.env.example` + `docker-compose.yml` block + `HOTEL_SERVICE_URL`/`FLIGHT_SERVICE_URL` + `booking_service_db` provisioned and verified
+- [x] DTOs — `HotelBookingRequest`/`FlightBookingRequest` (two creation endpoints, not one polymorphic request), `HotelBookingResponse`/`FlightBookingResponse`, plus **`BookingResponse`** (sealed interface, `permits` both) for `GET /bookings/mine`'s unified list
+- [x] `JwtService`/`JwtAuthFilter` (no partner authority needed), `SecurityConfig` locked to `hasRole("TRAVELER")` on every route (stricter than User Service's plain `anyRequest().authenticated()`, since every route here is a traveler-only action) + `RestAccessDeniedHandler`
+- [x] `HotelServiceClient`/`FlightServiceClient` (`client/` package, new) — first inter-service HTTP calls in this project, via `RestClient`, token-relay JWT forwarding. See `docs/inter-service-http-calls.md` (new, general reference doc for this pattern).
+- [x] `BookingService` — create (reserve-then-save), cancel (release-then-update, with the distributed-consistency gap called out explicitly, not silently ignored), unified `getMyBookings` with optional `?type=` filter
+- [x] `BookingController` — `POST /bookings/hotel-rooms`, `POST /bookings/flight-seats`, `PATCH /bookings/{id}/cancel`, `GET /bookings/mine`
+- [x] `GlobalExceptionHandler` + custom exceptions, incl. `InventoryServiceUnavailableException` → `503` (new status for this project — a downstream service being unreachable, not this service's own fault)
+- [x] `docs/api-reference.md` Booking Service section
+- [x] Verified running both natively (`./mvnw spring-boot:run`) and via `docker compose up`
+- [ ] Unit/integration tests — still deferred, same as every other service
 
 ### 3.3 Service Discovery (Eureka)
 **Business goal:** none directly user-facing — this is infrastructure that makes the next step (Gateway) possible without hardcoding ports/hostnames.
