@@ -67,6 +67,12 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
     }
 
+    // Seat exists but has no availableCount left - distinct from 404 (seat found, just sold out).
+    @ExceptionHandler(SeatUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleSeatUnavailable(SeatUnavailableException ex) {
+        return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     // --- Bad input (400) ---
     // Manual validation on JsonNode-bound merge-patch bodies (see each service's update()),
     // plus the seatCount-ceiling checks in FlightService/FlightSeatService.

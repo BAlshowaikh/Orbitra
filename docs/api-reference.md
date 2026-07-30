@@ -146,6 +146,7 @@ Entities: `Hotel` (owned by a PARTNER account via `ownerId`, a partner may own m
 - `PARTNER_HOTEL` = `PARTNER` role **and** `partnerType: HOTEL` on the JWT (a `PARTNER_FLIGHT` account is rejected).
 - `(owner)` = ownership is checked in the service layer (JWT `sub` vs. `Hotel.ownerId`), not just role — a `PARTNER_HOTEL` token for a *different* hotel still gets `403`.
 - `Public (+owner)` = anyone can call it, but the owning partner's token unlocks extra data (inactive rows) the response otherwise omits.
+- `TRAVELER` (reserve/release only) = **not** an ownership check — any authenticated traveler can call these, since they're reserving inventory for themselves, not managing someone else's listing. Called by Booking Service, which forwards the original traveler's own JWT rather than using any special service-to-service credential.
 
 ### Hotels
 
@@ -168,6 +169,8 @@ Entities: `Hotel` (owned by a PARTNER account via `ownerId`, a partner may own m
 | PATCH | `/hotels/{hotelId}/rooms/{roomId}/status` | PARTNER_HOTEL (owner) | `UpdateActiveRequest` | `RoomResponse` |
 | GET | `/hotels/{hotelId}/rooms/{roomId}/availability` | PARTNER_HOTEL (owner) | — (query, required: `startDate`, `endDate`) | `List<AvailabilityResponse>` |
 | PUT | `/hotels/{hotelId}/rooms/{roomId}/availability` | PARTNER_HOTEL (owner) | `AvailabilityRangeRequest` | `List<AvailabilityResponse>` |
+| POST | `/hotels/{hotelId}/rooms/{roomId}/reserve` | TRAVELER | `ReserveRoomRequest` | `ReserveRoomResponse` |
+| POST | `/hotels/{hotelId}/rooms/{roomId}/release` | TRAVELER | `ReserveRoomRequest` | `List<AvailabilityResponse>` |
 
 ### Room Types (admin catalog)
 
@@ -276,6 +279,25 @@ Upserts one `Availability` row per date in `[startDate, endDate]` with the given
 ```
 The count already has the row-absence-means-default-available fallback applied — callers never need to know whether a given date had an explicit override row.
 
+### `ReserveRoomRequest` (`POST .../reserve` and `.../release`)
+```json
+{ "checkInDate": "2026-08-01", "checkOutDate": "2026-08-04" }
+```
+`checkOutDate` is exclusive, same semantics as `GET /hotels`' search filters — this reserves/releases every night in `[checkInDate, checkOutDate)`. `reserve` is all-or-nothing across the whole stay: if even one night in the range has no availability left, the entire call fails with `409` and nothing is decremented (checked under a lock on the parent `Room`, so a concurrent reserve/release for the same room can't interleave mid-check). `release` reverses it, capped so it can never push a night's count above the room's `totalInventory`.
+
+### `ReserveRoomResponse` (`POST .../reserve` only — `release` still returns `List<AvailabilityResponse>`)
+```json
+{
+  "basePricePerNight": 150.00,
+  "nights": [
+    { "date": "2026-08-01", "availableCount": 4 },
+    { "date": "2026-08-02", "availableCount": 4 },
+    { "date": "2026-08-03", "availableCount": 4 }
+  ]
+}
+```
+`basePricePerNight` is included so the caller (Booking Service) can compute a total price without a second call back to this service — `release` doesn't need it, since nothing is being priced there.
+
 ### `UpdateActiveRequest` (shared by every `.../status` endpoint in this service)
 ```json
 { "active": false }
@@ -291,12 +313,13 @@ The plain create-time DTOs (`HotelRequest`/`RoomRequest`/`RoomTypeRequest`) are 
 
 Base URL: `http://localhost:8084` · Source: `flight-service/` · Package: `com.orbitra.flight_service`
 
-Entities: `Flight` (owned by a PARTNER account via `ownerId`, a partner may own many — **a single dated departure, not a recurring schedule**: same route on a different day is a different `Flight` row with its own unique `flightNumber`) → `FlightSeat` (a flight's own priced instance of a `SeatClass`, with `totalInventory` fixed by the partner and `availableCount` decremented only by future Booking Service — never partner-editable directly). `SeatClass` is a separate, admin-managed global catalog (e.g. "Business") partners pick from by id when adding a `FlightSeat`. No `Availability`/date-range table, unlike Hotel Service — a `Flight` is already pinned to one date, so there's no calendar to override. See `docs/architecture&logic.md` for the full design rationale.
+Entities: `Flight` (owned by a PARTNER account via `ownerId`, a partner may own many — **a single dated departure, not a recurring schedule**: same route on a different day is a different `Flight` row with its own unique `flightNumber`) → `FlightSeat` (a flight's own priced instance of a `SeatClass`, with `totalInventory` fixed by the partner and `availableCount` decremented only by the `reserve` endpoint below, called by Booking Service — never partner-editable directly). `SeatClass` is a separate, admin-managed global catalog (e.g. "Business") partners pick from by id when adding a `FlightSeat`. No `Availability`/date-range table, unlike Hotel Service — a `Flight` is already pinned to one date, so there's no calendar to override. See `docs/architecture&logic.md` for the full design rationale.
 
 **Role column notes specific to this service:**
 - `PARTNER_FLIGHT` = `PARTNER` role **and** `partnerType: FLIGHT` on the JWT (a `PARTNER_HOTEL` account is rejected).
 - `(owner)` = ownership is checked in the service layer (JWT `sub` vs. `Flight.ownerId`), not just role — a `PARTNER_FLIGHT` token for a *different* flight still gets `403`.
 - `Public (+owner)` = anyone can call it, but the owning partner's token unlocks extra data (inactive rows) the response otherwise omits.
+- `TRAVELER` (reserve/release only) = **not** an ownership check — any authenticated traveler can call these. Called by Booking Service, which forwards the original traveler's own JWT rather than using any special service-to-service credential.
 
 ### Flights
 
@@ -317,8 +340,12 @@ Entities: `Flight` (owned by a PARTNER account via `ownerId`, a partner may own 
 | POST | `/flights/{flightId}/seats` | PARTNER_FLIGHT (owner) | `FlightSeatRequest` | `FlightSeatResponse` |
 | PATCH | `/flights/{flightId}/seats/{seatId}` | PARTNER_FLIGHT (owner) | Partial JSON (see below) | `FlightSeatResponse` |
 | PATCH | `/flights/{flightId}/seats/{seatId}/status` | PARTNER_FLIGHT (owner) | `UpdateActiveRequest` | `FlightSeatResponse` |
+| POST | `/flights/{flightId}/seats/{seatId}/reserve` | TRAVELER | — | `FlightSeatResponse` |
+| POST | `/flights/{flightId}/seats/{seatId}/release` | TRAVELER | — | `FlightSeatResponse` |
 
-No availability-range endpoint here, unlike Hotel Service's `PUT .../rooms/{roomId}/availability` — `availableCount` only ever changes via a future booking, never a partner-submitted date range.
+No request body on `reserve`/`release` — there's only one seat to act on, identified entirely by the path. `reserve` atomically decrements `availableCount` by one and returns `409` if it was already `0`; `release` reverses it, capped so it can never push `availableCount` above `totalInventory`. Both are a single guarded `UPDATE` (`availableCount > 0` / `< totalInventory`), which is enough for concurrency safety here — no explicit locking needed, unlike Hotel Service's date-range version of the same idea.
+
+No availability-range endpoint here, unlike Hotel Service's `PUT .../rooms/{roomId}/availability` — `availableCount` only ever changes via `reserve`/`release` above, never a partner-submitted date range.
 
 ### Seat Classes (admin catalog)
 
@@ -440,7 +467,84 @@ No `amenities` field, unlike `HotelDetailResponse` — this service has no fligh
 
 ## Booking Service
 
-*Not yet built.*
+Base URL: `http://localhost:8085` · Source: `booking-service/` · Package: `com.orbitra.booking_service`
+
+Entities: `Booking` (abstract, JOINED JPA inheritance — shared parent table holding `travelerId`, `status`, `totalPrice`, `createdAt`) → `HotelBooking`/`FlightBooking` (concrete extension tables holding only their own type-specific fields, no nulls either way). `totalPrice` is snapshotted once at creation (from Hotel/Flight Service's `reserve` response) and never recomputed — a partner changing their price later doesn't retroactively change what a past booking shows. `status` only ever moves `PENDING` → `CANCELLED` for now; `COMPLETED` and a payment-driven `CONFIRMED` transition wait for Payment Service (Phase 4).
+
+**This is the first service in the project that calls other services synchronously** — creating or cancelling a booking calls Hotel Service's or Flight Service's `reserve`/`release` endpoints internally, forwarding the caller's own JWT unchanged (see `docs/inter-service-http-calls.md` for the general pattern, `CLAUDE.md`/`docs/architecture&logic.md` for this project's specifics). Practical consequence: if Hotel Service or Flight Service is down or unreachable when you call this service, you'll get a `503`, not a `500` — see `InventoryServiceUnavailableException` below.
+
+**Role column notes specific to this service:**
+- Every single endpoint requires `TRAVELER` — unlike every other service so far, there's no public/partner/admin route mix here at all (`SecurityConfig` is `.anyRequest().hasRole("TRAVELER")`).
+- `(owner)` = a booking's ownership check is baked directly into the lookup query (`findByIdAndTravelerId`) — a booking that exists but belongs to someone else returns the exact same `404` as one that doesn't exist at all, so probing other travelers' booking ids can't distinguish the two cases.
+
+### Bookings
+
+| Method | Path | Role | Request body | Response body |
+|---|---|---|---|---|
+| POST | `/bookings/hotel-rooms` | TRAVELER | `HotelBookingRequest` | `HotelBookingResponse` |
+| POST | `/bookings/flight-seats` | TRAVELER | `FlightBookingRequest` | `FlightBookingResponse` |
+| PATCH | `/bookings/{id}/cancel` | TRAVELER (owner) | — | — (`204 No Content`) |
+| GET | `/bookings/mine` | TRAVELER | — (query: `type` optional — `HOTEL`/`FLIGHT`, omit for both mixed together; `page`, `size`) | `PagedResponse<BookingResponse>` |
+
+### `HotelBookingRequest` (`POST /bookings/hotel-rooms`)
+```json
+{ "hotelId": 1, "roomId": 5, "checkInDate": "2026-08-01", "checkOutDate": "2026-08-04" }
+```
+`checkOutDate` is exclusive, same semantics as Hotel Service's own `ReserveRoomRequest`. Calls `POST /hotels/{hotelId}/rooms/{roomId}/reserve` on Hotel Service before saving anything locally — a `409` there (no availability for one of the requested nights) surfaces here as `409` too (`InsufficientAvailabilityException`), and nothing gets saved.
+
+### `FlightBookingRequest` (`POST /bookings/flight-seats`)
+```json
+{ "flightId": 1, "flightSeatId": 5 }
+```
+Calls `POST /flights/{flightId}/seats/{seatId}/reserve` on Flight Service the same way — `409` there means the seat is sold out.
+
+### `HotelBookingResponse`
+```json
+{
+  "id": 1,
+  "travelerId": 7,
+  "status": "PENDING",
+  "totalPrice": 450.00,
+  "hotelId": 1,
+  "roomId": 5,
+  "checkInDate": "2026-08-01",
+  "checkOutDate": "2026-08-04",
+  "createdAt": "2026-07-30T10:00:00Z"
+}
+```
+`totalPrice` = Hotel Service's `basePricePerNight` × number of nights, computed here, not on Hotel Service.
+
+### `FlightBookingResponse`
+```json
+{
+  "id": 2,
+  "travelerId": 7,
+  "status": "PENDING",
+  "totalPrice": 89.99,
+  "flightId": 1,
+  "flightSeatId": 5,
+  "createdAt": "2026-07-30T10:05:00Z"
+}
+```
+`totalPrice` = Flight Service's `basePricePerSeat` directly (a `FlightBooking` is always exactly one seat, no multiplication).
+
+### `BookingResponse` (`GET /bookings/mine` only — sealed, mixes both shapes above)
+```json
+{
+  "content": [
+    { "type": "HOTEL", "id": 1, "travelerId": 7, "status": "PENDING", "totalPrice": 450.00, "hotelId": 1, "roomId": 5, "checkInDate": "2026-08-01", "checkOutDate": "2026-08-04", "createdAt": "2026-07-30T10:00:00Z" },
+    { "type": "FLIGHT", "id": 2, "travelerId": 7, "status": "PENDING", "totalPrice": 89.99, "flightId": 1, "flightSeatId": 5, "createdAt": "2026-07-30T10:05:00Z" }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 2,
+  "totalPages": 1
+}
+```
+`"type"` is a Jackson-added discriminator (`@JsonTypeInfo`/`@JsonSubTypes`), not a field either DTO declares itself — each item only ever has its own real fields, no cross-type nulls. One query, sorted together, when `?type=` is omitted; add `?type=HOTEL` or `?type=FLIGHT` to narrow to one kind only (reuses the same per-type query either standalone endpoint would have used).
+
+### Cancellation semantics (`PATCH /bookings/{id}/cancel`)
+Only a `PENDING` booking can be cancelled (`400` otherwise, `InvalidBookingStateException`). Calls Hotel/Flight Service's `release` endpoint first, and only marks the booking `CANCELLED` locally once that succeeds — **known gap**: if `release` succeeds but the local status update then fails, the booking is stuck `PENDING` while its inventory has already been given back elsewhere. This is a real distributed-consistency issue, intentionally not solved here — it's what this project's Saga/compensating-transaction work (Phase 4) eventually closes.
 
 ## Payment Service
 

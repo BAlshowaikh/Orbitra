@@ -124,3 +124,24 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$FLIGHT_DB_NAME" \
      -v flight_db_user="$FLIGHT_DB_USER" <<-'EOSQL'
     GRANT ALL ON SCHEMA public TO :"flight_db_user";
 EOSQL
+
+# --- booking-service's database + dedicated user ---
+# Same shape again - documents what a fresh setup creates, but has no effect
+# on the already-running container. booking_service_db/booking_service must
+# also be provisioned manually, once, against the live container (see
+# docs/docker-setup.md and database/postgres/provision-service.sh).
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+     -v booking_db_name="$BOOKING_DB_NAME" \
+     -v booking_db_user="$BOOKING_DB_USER" \
+     -v booking_db_password="$BOOKING_DB_PASSWORD" <<-'EOSQL'
+    CREATE DATABASE :"booking_db_name";
+    CREATE USER :"booking_db_user" WITH PASSWORD :'booking_db_password';
+
+    REVOKE ALL ON DATABASE :"booking_db_name" FROM PUBLIC;
+    GRANT ALL PRIVILEGES ON DATABASE :"booking_db_name" TO :"booking_db_user";
+EOSQL
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$BOOKING_DB_NAME" \
+     -v booking_db_user="$BOOKING_DB_USER" <<-'EOSQL'
+    GRANT ALL ON SCHEMA public TO :"booking_db_user";
+EOSQL

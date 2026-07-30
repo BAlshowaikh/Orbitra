@@ -79,6 +79,14 @@ public class SecurityConfig {
                         //     FlightSeatService, not here). ---
                         .requestMatchers(HttpMethod.GET, "/flights/*/seats").permitAll()
 
+                        // --- Reserve/release - TRAVELER only, called by Booking
+                        //     Service forwarding the traveler's own JWT (not the
+                        //     owning partner's). Must precede the partner-only
+                        //     blanket "/flights/*/seats/**" rule below, or that
+                        //     rule would shadow these and reject every traveler. ---
+                        .requestMatchers(HttpMethod.POST, "/flights/*/seats/*/reserve").hasRole("TRAVELER")
+                        .requestMatchers(HttpMethod.POST, "/flights/*/seats/*/release").hasRole("TRAVELER")
+
                         // --- Flight/seat writes - all partner-only, no public
                         //     GETs under a specific flight's seats beyond the
                         //     list route above ---

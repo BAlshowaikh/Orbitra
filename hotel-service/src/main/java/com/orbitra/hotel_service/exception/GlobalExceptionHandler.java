@@ -62,6 +62,12 @@ public class GlobalExceptionHandler {
         return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
     }
 
+    // Room exists but has no availability left for at least one requested night.
+    @ExceptionHandler(RoomUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleRoomUnavailable(RoomUnavailableException ex) {
+        return buildResponse(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     // --- Bad input (400) ---
     // Manual validation on JsonNode-bound merge-patch bodies (see each service's update()).
     @ExceptionHandler(InvalidRequestException.class)

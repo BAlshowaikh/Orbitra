@@ -9,6 +9,7 @@ package com.orbitra.hotel_service.service;
 import com.orbitra.hotel_service.dto.AvailabilityRangeRequest;
 import com.orbitra.hotel_service.dto.AvailabilityResponse;
 import com.orbitra.hotel_service.dto.RoomRequest;
+import com.orbitra.hotel_service.dto.ReserveRoomResponse;
 import com.orbitra.hotel_service.dto.RoomResponse;
 import com.orbitra.hotel_service.exception.DuplicateRoomException;
 import com.orbitra.hotel_service.exception.ForbiddenException;
@@ -16,6 +17,7 @@ import com.orbitra.hotel_service.exception.HotelNotFoundException;
 import com.orbitra.hotel_service.exception.InvalidRequestException;
 import com.orbitra.hotel_service.exception.RoomNotFoundException;
 import com.orbitra.hotel_service.exception.RoomTypeNotFoundException;
+import com.orbitra.hotel_service.exception.RoomUnavailableException;
 import com.orbitra.hotel_service.model.Availability;
 import com.orbitra.hotel_service.model.Hotel;
 import com.orbitra.hotel_service.model.Room;
@@ -161,7 +163,88 @@ public class RoomService {
                 .orElse(room.getTotalInventory());
     }
 
+    // ---------------- METHOD 7: Reserve a room for a stay (called by Booking Service, any TRAVELER) ----------------
+    // No ownership check - unlike every other method here, the caller isn't
+    // the owning partner, it's a traveler booking a room. Authorization is
+    // just "authenticated as TRAVELER", enforced in SecurityConfig instead.
+    @Transactional
+    public ReserveRoomResponse reserve(Long hotelId, Long roomId, LocalDate checkInDate, LocalDate checkOutDate) {
+        // Locks the Room row for this whole transaction - see
+        // RoomRepository.findByIdForUpdate for why this (not a per-date lock)
+        // is what actually makes the check-then-write below safe.
+        Room room = getReservableRoom(hotelId, roomId);
+        List<LocalDate> nights = nightsBetween(checkInDate, checkOutDate);
+
+        // All-or-nothing: check every night first, only write if every night
+        // has at least one available - the room lock held since
+        // getReservableRoom() means no concurrent reserve/release for this
+        // same room can interleave between this check and the writes below.
+        for (LocalDate date : nights) {
+            if (getEffectiveAvailability(room, date) <= 0) {
+                throw new RoomUnavailableException("No availability for room " + roomId + " on " + date);
+            }
+        }
+
+        List<AvailabilityResponse> result = new ArrayList<>();
+        for (LocalDate date : nights) {
+            Availability row = availabilityRepository.findByRoomIdAndDate(roomId, date)
+                    .orElseGet(() -> Availability.builder().room(room).date(date).availableCount(room.getTotalInventory()).build());
+            row.setAvailableCount(row.getAvailableCount() - 1);
+            availabilityRepository.save(row);
+            result.add(new AvailabilityResponse(date, row.getAvailableCount()));
+        }
+        return new ReserveRoomResponse(room.getBasePricePerNight(), result);
+    }
+
+    // ---------------- METHOD 8: Release a room for a stay (called by Booking Service, on cancellation) ----------------
+    @Transactional
+    public List<AvailabilityResponse> release(Long hotelId, Long roomId, LocalDate checkInDate, LocalDate checkOutDate) {
+        Room room = getReservableRoom(hotelId, roomId);
+        List<LocalDate> nights = nightsBetween(checkInDate, checkOutDate);
+
+        List<AvailabilityResponse> result = new ArrayList<>();
+        for (LocalDate date : nights) {
+            Availability row = availabilityRepository.findByRoomIdAndDate(roomId, date)
+                    .orElseGet(() -> Availability.builder().room(room).date(date).availableCount(room.getTotalInventory()).build());
+            // Capped at totalInventory so a release can't push a night's
+            // count past what the partner actually allocated - same safety
+            // net as FlightSeat's incrementAvailableCount guard.
+            if (row.getAvailableCount() < room.getTotalInventory()) {
+                row.setAvailableCount(row.getAvailableCount() + 1);
+                availabilityRepository.save(row);
+            }
+            result.add(new AvailabilityResponse(date, row.getAvailableCount()));
+        }
+        return result;
+    }
+
     // ---------------- Helpers ----------------
+
+    // ------------- HELPER 0: Get a room under the given hotel for reserve/release, both must be active -------------
+    private Room getReservableRoom(Long hotelId, Long roomId) {
+        Room room = roomRepository.findByIdForUpdate(roomId)
+                .filter(r -> r.getHotel().getId().equals(hotelId))
+                .orElseThrow(() -> new RoomNotFoundException("Room not found: " + roomId));
+        if (!room.isActive() || !room.getHotel().isActive()) {
+            throw new RoomNotFoundException("Room not found: " + roomId);
+        }
+        return room;
+    }
+
+    // ------------- HELPER 0b: Validate checkIn/checkOut and expand to the list of nights [checkIn, checkOut) -------------
+    private List<LocalDate> nightsBetween(LocalDate checkInDate, LocalDate checkOutDate) {
+        if (!checkInDate.isBefore(checkOutDate)) {
+            throw new InvalidRequestException("checkOutDate must be after checkInDate");
+        }
+        if (ChronoUnit.DAYS.between(checkInDate, checkOutDate) > MAX_RANGE_DAYS) {
+            throw new InvalidRequestException("Stay length cannot exceed " + MAX_RANGE_DAYS + " days");
+        }
+        List<LocalDate> nights = new ArrayList<>();
+        for (LocalDate date = checkInDate; date.isBefore(checkOutDate); date = date.plusDays(1)) {
+            nights.add(date);
+        }
+        return nights;
+    }
 
     // ------------- HELPER 1: Get a hotel and ensure the caller owns it -------------
     private Hotel getOwnedHotel(Long hotelId, Long callerId) {
