@@ -41,6 +41,13 @@
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
 		</dependency>
+		<!-- Feign - declarative HTTP clients for calling Hotel/Flight Service,
+		     resolved via Eureka instead of the hardcoded HOTEL_SERVICE_URL/
+		     FLIGHT_SERVICE_URL this service started with. -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-openfeign</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
