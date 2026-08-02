@@ -1,0 +1,25 @@
+# .dockerignore
+# Excludes files from the Docker build context. Keeps builds fast.
+# No .env here - this service has no secrets (no DB, no JWT) to keep out of
+# the image, unlike every other service in this project.
+
+# Build output - regenerated fresh inside the container by the build stage.
+target/
+
+# Version control
+.git
+.gitignore
+
+# IDE/editor metadata
+.idea/
+.vscode/
+*.iml
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Docker's own files
+Dockerfile
+docker-compose.yml
+.dockerignore

@@ -30,8 +30,25 @@
 		<java.version>21</java.version>
 		<!-- jjwt isn't part of Spring Boot's dependency-management BOM, so its version is pinned here -->
 		<jjwt.version>0.12.6</jjwt.version>
+		<!-- Confirmed via eureka-service's own Initializr scaffold - the Spring
+		     Cloud release train actually compatible with Spring Boot 4.1.0. -->
+		<spring-cloud.version>2025.1.2</spring-cloud.version>
 	</properties>
 	<dependencies>
+		<!-- Eureka client - registers this service by its spring.application.name
+		     and looks up other services by name instead of a hardcoded host/port. -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+		</dependency>
+		<!-- Feign - declarative HTTP clients for calling Hotel/Flight Service,
+		     resolved via Eureka instead of the hardcoded HOTEL_SERVICE_URL/
+		     FLIGHT_SERVICE_URL this service started with. -->
+		<dependency>
+			<groupId>org.springframework.cloud</groupId>
+			<artifactId>spring-cloud-starter-openfeign</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -114,6 +131,21 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
+
+	<!-- Imports Spring Cloud's own BOM on top of Spring Boot's - only adds/
+	     overlays Spring Cloud-specific dependency versions, doesn't touch or
+	     conflict with the JPA/Security/Flyway/JWT versions above. -->
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework.cloud</groupId>
+				<artifactId>spring-cloud-dependencies</artifactId>
+				<version>${spring-cloud.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 
 	<build>
 		<plugins>
