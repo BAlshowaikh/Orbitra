@@ -51,6 +51,17 @@ services:
       timeout: 5s
       retries: 5
 
+  # ----------- eureka-service -----------
+  # No Postgres, no JWT - pure service-registry infrastructure. Every other
+  # service below points at this one via EUREKA_URL once they're wired up as
+  # clients
+  eureka-service:
+    build:
+      context: ./eureka-service
+      dockerfile: Dockerfile
+    ports:
+      - "8761:8761"
+
   # ----------- auth-service -----------
   auth-service:
     build:
@@ -70,11 +81,14 @@ services:
       DB_PASSWORD: ${AUTH_DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS}
+      EUREKA_URL: http://eureka-service:8761/eureka
     depends_on:
       postgres:
         # Waits for the healthcheck above to actually pass, not just for the
         # container to start - Postgres takes a moment to become ready.
         condition: service_healthy
+      eureka-service:
+        condition: service_started
 
   # ----------- user-service -----------
   user-service:
@@ -93,9 +107,12 @@ services:
       # Same secret as auth-service - this service only validates tokens,
       # never issues its own.
       JWT_SECRET: ${JWT_SECRET}
+      EUREKA_URL: http://eureka-service:8761/eureka
     depends_on:
       postgres:
         condition: service_healthy
+      eureka-service:
+        condition: service_started
 
   # ----------- hotel-service -----------
   hotel-service:
@@ -115,9 +132,12 @@ services:
       # Same secret as auth-service/user-service - this service only
       # validates tokens, never issues its own.
       JWT_SECRET: ${JWT_SECRET}
+      EUREKA_URL: http://eureka-service:8761/eureka
     depends_on:
       postgres:
         condition: service_healthy
+      eureka-service:
+        condition: service_started
 
   # ----------- flight-service -----------
   flight-service:
@@ -136,9 +156,12 @@ services:
       # Same secret as the other services - this service only validates
       # tokens, never issues its own.
       JWT_SECRET: ${JWT_SECRET}
+      EUREKA_URL: http://eureka-service:8761/eureka
     depends_on:
       postgres:
         condition: service_healthy
+      eureka-service:
+        condition: service_started
 
   # ----------- booking-service -----------
   booking-service:
@@ -157,14 +180,16 @@ services:
       # Same secret as the other services - this service only validates
       # tokens, never issues its own.
       JWT_SECRET: ${JWT_SECRET}
-      # Compose service hostnames - the whole reason this project's first
-      # synchronous inter-service calls can use plain REST without Eureka
-      # yet (see travel-platform-plan.md's sequencing decision).
+      # Compose service hostnames - still used for now (Step 3 of the Eureka
+      # plan replaces these two with Feign+Eureka resolution; not done yet).
       HOTEL_SERVICE_URL: http://hotel-service:8083
       FLIGHT_SERVICE_URL: http://flight-service:8084
+      EUREKA_URL: http://eureka-service:8761/eureka
     depends_on:
       postgres:
         condition: service_healthy
+      eureka-service:
+        condition: service_started
       hotel-service:
         condition: service_started
       flight-service:
