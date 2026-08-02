@@ -180,10 +180,8 @@ services:
       # Same secret as the other services - this service only validates
       # tokens, never issues its own.
       JWT_SECRET: ${JWT_SECRET}
-      # Compose service hostnames - still used for now (Step 3 of the Eureka
-      # plan replaces these two with Feign+Eureka resolution; not done yet).
-      HOTEL_SERVICE_URL: http://hotel-service:8083
-      FLIGHT_SERVICE_URL: http://flight-service:8084
+      # Hotel/Flight Service are reached via Feign + Eureka now, resolved by
+      # name at call time - no more HOTEL_SERVICE_URL/FLIGHT_SERVICE_URL.
       EUREKA_URL: http://eureka-service:8761/eureka
     depends_on:
       postgres:
