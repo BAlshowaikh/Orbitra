@@ -6,8 +6,8 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 
 ## Where we are now
 
-- **Done:** Auth Service, User Service, Hotel Service, Flight Service, Booking Service (app layer + docs complete for all five, incl. Hotel/Flight's `reserve`/`release` endpoints; only unit/integration tests are outstanding across the board — tracked in `CLAUDE.md`, not duplicated here)
-- **In progress / up next:** Service Discovery (Eureka), then API Gateway — see Phase 3 below
+- **Done:** Auth Service, User Service, Hotel Service, Flight Service, Booking Service (app layer + docs complete for all five, incl. Hotel/Flight's `reserve`/`release` endpoints), plus Eureka service discovery (all 5 registered, Booking's Hotel/Flight calls rewritten to Feign+Eureka). Only unit/integration tests are outstanding across the board — tracked in `CLAUDE.md`, not duplicated here.
+- **In progress / up next:** API Gateway — see Phase 3 below
 
 ---
 
@@ -34,7 +34,7 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 ### 3.2 Booking Service — ✅ done (built, running, documented)
 **Business goal:** the actual "reserve this room / this seat" action — the core value proposition of a booking platform.
 
-**Sequencing note**: built *before* Eureka/Gateway exist (deliberately reordered — see `travel-platform-plan.md` §5/§6 for the full reasoning). Calls Hotel Service / Flight Service via plain REST (own `HotelServiceClient`/`FlightServiceClient`, native URLs by default, Docker Compose hostnames when containerized), and has its own `JwtService`/`JwtAuthFilter` copy same as every other service so far. Both get deliberately rewritten once 3.3/3.4 below exist — known, accepted rework, not a mistake.
+**Sequencing note**: built *before* Eureka/Gateway existed (deliberately reordered — see `travel-platform-plan.md` §5/§6 for the full reasoning). Originally called Hotel/Flight Service via plain REST with hardcoded URLs; rewritten to Feign + Eureka resolution once 3.3 below landed (see there for details) — known, accepted rework, not a mistake. Still has its own `JwtService`/`JwtAuthFilter` copy, same as every other service so far (Gateway/3.4 is what eventually centralizes that).
 
 **Part 1 — real overselling-protection on Hotel/Flight — ✅ done**, built ahead of Booking Service itself:
 - [x] Flight Service: `POST /flights/{flightId}/seats/{seatId}/reserve` / `.../release` — single atomic guarded `UPDATE`, no explicit locking needed (no date dimension)
@@ -46,10 +46,10 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 - [x] Entities — **revised mid-build**: not a single `Booking` table with nullable fields as originally planned, but **JOINED JPA inheritance** (Class Table Inheritance) instead: abstract `Booking` (shared table: `travelerId`, `status`, `totalPrice`, `createdAt`) → concrete `HotelBooking`/`FlightBooking` extension tables, each with only its own real fields, zero nulls either way. `totalPrice` added mid-build too (missing from the original plan) — snapshotted once at creation, never recomputed. See `CLAUDE.md`/`docs/architecture&logic.md` and `docs/springboot-java-notes.md` §18 (sealed interfaces) for the full reasoning.
 - [x] Repositories — `BookingRepository` (abstract, unified queries), `HotelBookingRepository`/`FlightBookingRepository` (concrete, type-scoped)
 - [x] Flyway migrations — `booking` (parent) → `hotel_booking` → `flight_booking`, each child's `id` a FK back to `booking(id)`, not its own sequence
-- [x] `application.properties` (port 8085) + `.env`/`.env.example` + `docker-compose.yml` block + `HOTEL_SERVICE_URL`/`FLIGHT_SERVICE_URL` + `booking_service_db` provisioned and verified
+- [x] `application.properties` (port 8085) + `.env`/`.env.example` + `docker-compose.yml` block + `booking_service_db` provisioned and verified. `HOTEL_SERVICE_URL`/`FLIGHT_SERVICE_URL` existed briefly, removed once 3.3's Feign rewrite landed.
 - [x] DTOs — `HotelBookingRequest`/`FlightBookingRequest` (two creation endpoints, not one polymorphic request), `HotelBookingResponse`/`FlightBookingResponse`, plus **`BookingResponse`** (sealed interface, `permits` both) for `GET /bookings/mine`'s unified list
 - [x] `JwtService`/`JwtAuthFilter` (no partner authority needed), `SecurityConfig` locked to `hasRole("TRAVELER")` on every route (stricter than User Service's plain `anyRequest().authenticated()`, since every route here is a traveler-only action) + `RestAccessDeniedHandler`
-- [x] `HotelServiceClient`/`FlightServiceClient` (`client/` package, new) — first inter-service HTTP calls in this project, via `RestClient`, token-relay JWT forwarding. See `docs/inter-service-http-calls.md` (new, general reference doc for this pattern).
+- [x] `HotelServiceClient`/`FlightServiceClient` (`client/` package, new) — first inter-service HTTP calls in this project, token-relay JWT forwarding. Originally built on `RestClient` with hardcoded URLs, rewritten to wrap `HotelServiceFeignClient`/`FlightServiceFeignClient` (Feign + Eureka name resolution) once 3.3 landed — same public methods/exception translation either way, only the internals changed. See `docs/inter-service-http-calls.md` (general reference doc for this pattern).
 - [x] `BookingService` — create (reserve-then-save), cancel (release-then-update, with the distributed-consistency gap called out explicitly, not silently ignored), unified `getMyBookings` with optional `?type=` filter
 - [x] `BookingController` — `POST /bookings/hotel-rooms`, `POST /bookings/flight-seats`, `PATCH /bookings/{id}/cancel`, `GET /bookings/mine`
 - [x] `GlobalExceptionHandler` + custom exceptions, incl. `InventoryServiceUnavailableException` → `503` (new status for this project — a downstream service being unreachable, not this service's own fault)
@@ -57,11 +57,11 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 - [x] Verified running both natively (`./mvnw spring-boot:run`) and via `docker compose up`
 - [ ] Unit/integration tests — still deferred, same as every other service
 
-### 3.3 Service Discovery (Eureka)
+### 3.3 Service Discovery (Eureka) — ✅ done
 **Business goal:** none directly user-facing — this is infrastructure that makes the next step (Gateway) possible without hardcoding ports/hostnames.
-- [ ] Eureka Server app (its own small Spring Boot project)
-- [ ] Register Auth, User, Hotel, Flight, Booking as Eureka clients
-- [ ] Rewrite Booking's direct REST calls to Hotel/Flight as Feign clients resolved via Eureka
+- [x] `eureka-service` app (own project, port 8761) — pure infrastructure, no DB/JWT/business logic. Named to match this repo's `-service` suffix convention rather than the more common `eureka-server`. Spring Cloud `2025.1.2` confirmed compatible with Spring Boot `4.1.0` via Initializr.
+- [x] Registered Auth, User, Hotel, Flight, Booking as Eureka clients — `spring-cloud-starter-netflix-eureka-client` + `eureka.client.service-url.defaultZone`, no code changes needed (auto-configuration handles registration from `spring.application.name`). Verified all 5 show `UP` on the dashboard, both natively and via `docker compose up`.
+- [x] Rewrote Booking's direct REST calls to Hotel/Flight as Feign clients resolved via Eureka — `HotelServiceFeignClient`/`FlightServiceFeignClient` (`@FeignClient(name = "...")`, Eureka resolves the host:port). `HotelServiceClient`/`FlightServiceClient` kept as thin wrappers around them (same public methods, same exception translation) specifically so `BookingService` needed zero changes — deliberately not a global Feign `ErrorDecoder`, to keep the "unreachable" and "declined" cases handled in one place same as before. `HOTEL_SERVICE_URL`/`FLIGHT_SERVICE_URL` config removed as dead.
 
 ### 3.4 API Gateway
 **Business goal:** one URL for the whole system instead of six different ports — the shape a real frontend or external client would expect.
