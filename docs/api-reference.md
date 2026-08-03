@@ -11,6 +11,44 @@ Endpoint reference for every microservice in Orbitra. One section per service �
   { "timestamp": "2026-07-12T09:38:27.99Z", "status": 404, "message": "No account with id 5" }
   ```
 - **DTOs are records** — request/response bodies never expose a JPA entity directly.
+- **Entry point**: external clients should call the API Gateway (`http://localhost:8080`, see its own section below) for everything — each service's own port listed below is only reachable from other containers on the Compose network now, not from outside Docker.
+
+---
+
+## API Gateway
+
+Base URL: `http://localhost:8080` · Source: `api-gateway/` · Package: `com.orbitra.api_gateway`
+
+The single entry point for every service below — each one's own port (8081–8085) is closed off from outside Docker; requests must go through here. Routes to the exact same endpoints documented in the rest of this file, unchanged — the Gateway doesn't add, remove, or reshape any endpoint, only forwards.
+
+### Routing table
+
+| Path prefix | Forwards to |
+|---|---|
+| `/auth/**` | auth-service |
+| `/users/**` | user-service |
+| `/hotels/**` | hotel-service |
+| `/room-types/**` | hotel-service |
+| `/flights/**` | flight-service |
+| `/seat-classes/**` | flight-service |
+| `/bookings/**` | booking-service |
+
+### Gateway-level rejections
+
+Same error shape as every other service (see Conventions above), but these two originate from the Gateway itself, before a request ever reaches a backend service:
+
+**Missing/invalid token on a protected route** → `401`
+```json
+{ "timestamp": "2026-08-03T11:17:02.63Z", "status": 401, "message": "Missing or malformed Authorization header" }
+```
+(or `"Invalid or expired token"` if a token was present but didn't validate)
+
+**Rate limit exceeded** → `429`, capped per client IP (`app.rate-limit.capacity`, default 20 requests per `app.rate-limit.refill-seconds`, default 60)
+```json
+{ "timestamp": "2026-08-03T11:20:00.00Z", "status": 429, "message": "Rate limit exceeded - try again later" }
+```
+
+Public routes (the same ones each service's own `SecurityConfig` already marks `permitAll` — browsing/search GETs, `/auth/register`, `/auth/login`) skip the token check entirely but are still subject to the rate limiter.
 
 ---
 

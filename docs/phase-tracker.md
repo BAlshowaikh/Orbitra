@@ -6,8 +6,8 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 
 ## Where we are now
 
-- **Done:** Auth Service, User Service, Hotel Service, Flight Service, Booking Service (app layer + docs complete for all five, incl. Hotel/Flight's `reserve`/`release` endpoints), plus Eureka service discovery (all 5 registered, Booking's Hotel/Flight calls rewritten to Feign+Eureka). Only unit/integration tests are outstanding across the board — tracked in `CLAUDE.md`, not duplicated here.
-- **In progress / up next:** API Gateway — see Phase 3 below
+- **Done:** Auth Service, User Service, Hotel Service, Flight Service, Booking Service (app layer + docs complete for all five, incl. Hotel/Flight's `reserve`/`release` endpoints), Eureka service discovery (all 5 registered, Booking's Hotel/Flight calls rewritten to Feign+Eureka), and API Gateway (routing, defense-in-depth JWT filter, in-memory rate limiting, backend ports closed — each piece verified individually via Docker Compose). Only unit/integration tests are outstanding across the board, plus one continuous end-to-end walkthrough through the Gateway alone — tracked in `CLAUDE.md`, not duplicated here.
+- **In progress / up next:** the end-to-end Gateway walkthrough (register → login → browse/search → book, all through port 8080), then the Angular frontend
 
 ---
 
@@ -63,12 +63,17 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 - [x] Registered Auth, User, Hotel, Flight, Booking as Eureka clients — `spring-cloud-starter-netflix-eureka-client` + `eureka.client.service-url.defaultZone`, no code changes needed (auto-configuration handles registration from `spring.application.name`). Verified all 5 show `UP` on the dashboard, both natively and via `docker compose up`.
 - [x] Rewrote Booking's direct REST calls to Hotel/Flight as Feign clients resolved via Eureka — `HotelServiceFeignClient`/`FlightServiceFeignClient` (`@FeignClient(name = "...")`, Eureka resolves the host:port). `HotelServiceClient`/`FlightServiceClient` kept as thin wrappers around them (same public methods, same exception translation) specifically so `BookingService` needed zero changes — deliberately not a global Feign `ErrorDecoder`, to keep the "unreachable" and "declined" cases handled in one place same as before. `HOTEL_SERVICE_URL`/`FLIGHT_SERVICE_URL` config removed as dead.
 
-### 3.4 API Gateway
+### 3.4 API Gateway — ✅ mostly done (routing/security/rate-limiting verified, full walkthrough pending)
 **Business goal:** one URL for the whole system instead of six different ports — the shape a real frontend or external client would expect.
-- [ ] Spring Cloud Gateway app
-- [ ] Route `/auth/**`, `/users/**`, `/hotels/**`, `/flights/**`, `/bookings/**` via Eureka
-- [ ] Centralize JWT validation at the Gateway (replaces each service's own `JwtAuthFilter` copy, including Booking's — the "real fix" flagged as deferred since Hotel Service was built)
-- [ ] Decide/confirm: do individual services still validate as a defense-in-depth layer, or fully hand off to the Gateway? (Worth a deliberate decision, not a default)
+- [x] Spring Cloud Gateway app — reactive (WebFlux), not WebMVC; regenerated once mid-build after an explicit best-practice-over-speed decision (see `CLAUDE.md`/`docs/architecture&logic.md`)
+- [x] Route `/auth/**`, `/users/**`, `/hotels/**` + `/room-types/**`, `/flights/**` + `/seat-classes/**`, `/bookings/**` via Eureka — YAML-based (`application.yml`), `lb://` scheme resolves each target through Eureka + Spring Cloud LoadBalancer
+- [x] Defense-in-depth JWT `GlobalFilter` — validates ahead of each service's own independent validation, not a replacement of it; mirrors each service's public-route allowlist rather than duplicating fine-grained role/ownership checks
+- [x] Decided: individual services still validate independently too (explicit decision, not a default) — the Gateway is one additional layer, not a centralization/replacement of each service's own `JwtAuthFilter`
+- [x] In-memory rate limiting (Bucket4j), per client IP, ahead of the JWT filter in the filter chain
+- [x] Backend services' direct port mappings (8081–8085) closed off in `docker-compose.yml` — Gateway (8080) is the only entry point reachable from outside Docker
+- [x] `docs/api-reference.md` API Gateway section (routing table + Gateway-level rejection shapes)
+- [ ] Full end-to-end business-flow verification through the Gateway alone (register → login → browse/search → book) — individual pieces verified, not yet walked through as one continuous flow
+- [ ] Unit/integration tests — same as every other service
 
 **Definition of done for Phase 3:** a traveler can register, browse/search hotels and flights, reserve a room or seat, see it in their booking history, and cancel it — all through one Gateway URL — even though nothing is actually paid for yet.
 

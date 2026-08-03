@@ -62,13 +62,36 @@ services:
     ports:
       - "8761:8761"
 
+  # ----------- api-gateway -----------
+  # No Postgres - routes to the 5 business services below (resolved via
+  # Eureka, not hardcoded hosts) and does its own defense-in-depth JWT check
+  # and rate limiting ahead of each service's own. The only host-reachable
+  # entry point now - the 5 services below no longer publish their own
+  # ports, so they're only reachable from other containers on the Compose
+  # network, not from outside Docker.
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_URL: http://eureka-service:8761/eureka
+      # Same secret as every other service - this is a defense-in-depth
+      # check, not the sole validator (decision: keep each service's own
+      # JwtAuthFilter too).
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on:
+      eureka-service:
+        condition: service_started
+
   # ----------- auth-service -----------
   auth-service:
     build:
       context: ./auth-service
       dockerfile: Dockerfile
-    ports:
-      - "8081:8081"
+    # No host port mapping - only reachable from other containers (like
+    # api-gateway) on the Compose network, not from outside Docker.
     environment:
       # DB_HOST is the shared postgres service's name above - Compose lets
       # containers reach each other using the other service's name as a
@@ -95,8 +118,8 @@ services:
     build:
       context: ./user-service
       dockerfile: Dockerfile
-    ports:
-      - "8082:8082"
+    # No host port mapping - only reachable from other containers (like
+    # api-gateway) on the Compose network, not from outside Docker.
     environment:
       # Same shared postgres container as auth-service, own dedicated database.
       DB_HOST: postgres # the postgres service defined above, not localhost
@@ -119,8 +142,8 @@ services:
     build:
       context: ./hotel-service
       dockerfile: Dockerfile
-    ports:
-      - "8083:8083"
+    # No host port mapping - only reachable from other containers (like
+    # api-gateway) on the Compose network, not from outside Docker.
     environment:
       # Same shared postgres container as auth-service/user-service, own
       # dedicated database.
@@ -144,8 +167,8 @@ services:
     build:
       context: ./flight-service
       dockerfile: Dockerfile
-    ports:
-      - "8084:8084"
+    # No host port mapping - only reachable from other containers (like
+    # api-gateway) on the Compose network, not from outside Docker.
     environment:
       # Same shared postgres container as the other services, own dedicated database.
       DB_HOST: postgres # the postgres service defined above, not localhost
@@ -168,8 +191,8 @@ services:
     build:
       context: ./booking-service
       dockerfile: Dockerfile
-    ports:
-      - "8085:8085"
+    # No host port mapping - only reachable from other containers (like
+    # api-gateway) on the Compose network, not from outside Docker.
     environment:
       # Same shared postgres container as the other services, own dedicated database.
       DB_HOST: postgres # the postgres service defined above, not localhost

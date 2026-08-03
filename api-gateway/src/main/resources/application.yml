@@ -1,0 +1,82 @@
+# application.yml
+# Runtime configuration for the API Gateway - the single entry point for
+# every business service, routed via Eureka instead of clients hitting 5
+# different ports directly. The only service in this project using YAML
+# instead of .properties, and the only one on the reactive (WebFlux) stack -
+# both deliberate choices specific to this service (see CLAUDE.md/
+# docs/architecture&logic.md for the reasoning), not the project's general
+# convention changing.
+#
+# Routes are config here (a plain data list: match this path, forward here),
+# not Java code - the more idiomatic fit for Spring Cloud Gateway when
+# nothing dynamic/conditional is needed, which is true for all seven routes
+# below. Seven, not five - hotel-service and flight-service each expose a
+# second top-level path (/room-types, /seat-classes) for their admin
+# catalogs, not nested under /hotels or /flights. Each uri's lb:// scheme
+# resolves the target through Eureka instead of a hardcoded host.
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      # server.webflux is required in this namespace (not the classic
+      # spring.cloud.gateway.routes) - confirmed via the official docs after
+      # the plain key silently produced zero routes (a 404 with Spring's
+      # generic "nothing matched" body, not any of our own error shapes).
+      server:
+        webflux:
+          routes:
+            - id: auth-service
+              uri: lb://auth-service
+              predicates:
+                - Path=/auth/**
+            - id: user-service
+              uri: lb://user-service
+              predicates:
+                - Path=/users/**
+            - id: hotel-service
+              uri: lb://hotel-service
+              predicates:
+                - Path=/hotels/**
+            - id: hotel-service-room-types
+              uri: lb://hotel-service
+              predicates:
+                - Path=/room-types/**
+            - id: flight-service
+              uri: lb://flight-service
+              predicates:
+                - Path=/flights/**
+            - id: flight-service-seat-classes
+              uri: lb://flight-service
+              predicates:
+                - Path=/seat-classes/**
+            - id: booking-service
+              uri: lb://booking-service
+              predicates:
+                - Path=/bookings/**
+
+# The conventional "front door" port for a gateway - distinct from the
+# business services (8081-8085) and eureka-service (8761).
+server:
+  port: ${SERVER_PORT:8080}
+
+eureka:
+  client:
+    service-url:
+      # Native default reaches Eureka on localhost; docker-compose overrides
+      # it to the Compose service hostname.
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+
+app:
+  jwt:
+    # Must be the EXACT SAME secret as every other service's app.jwt.secret -
+    # this is the defense-in-depth check at the Gateway, on top of (not
+    # instead of) each service's own validation.
+    secret: ${JWT_SECRET:api-gateway-dev-fallback-secret-please-override-me}
+  rate-limit:
+    # Token-bucket sizing, per client IP (RateLimiterService). A bucket
+    # starts full and refills at this rate - capacity allows a short burst,
+    # refill-seconds is how long it takes to fully refill from empty.
+    capacity: ${RATE_LIMIT_CAPACITY:20}
+    refill-seconds: ${RATE_LIMIT_REFILL_SECONDS:60}
