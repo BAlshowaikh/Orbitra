@@ -12,10 +12,10 @@
 # running.
 #
 # Usage (run from anywhere):
-#   ./database/postgres/provision-service.sh <db_name> <db_user> <db_password>
+#   ./orbitra-be/database/postgres/provision-service.sh <db_name> <db_user> <db_password>
 #
 # Example:
-#   ./database/postgres/provision-service.sh user_service_db user_service 'Ur7fQ2kxwPz9!Ln4'
+#   ./orbitra-be/database/postgres/provision-service.sh user_service_db user_service 'Ur7fQ2kxwPz9!Ln4'
 
 set -e
 
@@ -31,7 +31,7 @@ DB_PASSWORD="$3"
 # Resolve paths relative to this script's own location, so it works no matter
 # which directory it's actually run from.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$SCRIPT_DIR/../.."
+REPO_ROOT="$SCRIPT_DIR/../../.."
 
 # Bootstrap superuser credentials (POSTGRES_USER/POSTGRES_DB) live in the same
 # root .env docker-compose.yml reads - loaded here so this script never

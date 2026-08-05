@@ -17,7 +17,7 @@ Endpoint reference for every microservice in Orbitra. One section per service �
 
 ## API Gateway
 
-Base URL: `http://localhost:8080` · Source: `api-gateway/` · Package: `com.orbitra.api_gateway`
+Base URL: `http://localhost:8080` · Source: `orbitra-be/api-gateway/` · Package: `com.orbitra.api_gateway`
 
 The single entry point for every service below — each one's own port (8081–8085) is closed off from outside Docker; requests must go through here. Routes to the exact same endpoints documented in the rest of this file, unchanged — the Gateway doesn't add, remove, or reshape any endpoint, only forwards.
 
@@ -54,7 +54,7 @@ Public routes (the same ones each service's own `SecurityConfig` already marks `
 
 ## Auth Service
 
-Base URL: `http://localhost:8081` · Source: `auth-service/` · Package: `com.orbitra.auth_service`
+Base URL: `http://localhost:8081` · Source: `orbitra-be/auth-service/` · Package: `com.orbitra.auth_service`
 
 | Method | Path | Role | Request body | Response body |
 |---|---|---|---|---|
@@ -128,7 +128,7 @@ Idempotent — setting a value the account already has still returns `200`. Unkn
 
 ## User Service
 
-Base URL: `http://localhost:8082` · Source: `user-service/` · Package: `com.orbitra.user_service`
+Base URL: `http://localhost:8082` · Source: `orbitra-be/user-service/` · Package: `com.orbitra.user_service`
 
 Owns profile data only (name, contact info, preferences) — credentials/role/enabled status stay in Auth Service. Linked to `Account` only by sharing the same id value (no cross-database foreign key); `id` here is never auto-generated, it's always the caller's own account id from their JWT.
 
@@ -176,7 +176,7 @@ Notes:
 
 ## Hotel Service
 
-Base URL: `http://localhost:8083` · Source: `hotel-service/` · Package: `com.orbitra.hotel_service`
+Base URL: `http://localhost:8083` · Source: `orbitra-be/hotel-service/` · Package: `com.orbitra.hotel_service`
 
 Entities: `Hotel` (owned by a PARTNER account via `ownerId`, a partner may own many) → `Room` (a hotel's own priced/staffed instance of a `RoomType`) → `Availability` (per-room, per-date override; a missing row means "fully available," i.e. `COALESCE(row's availableCount, room.totalInventory)`). `RoomType` is a separate, admin-managed global catalog (e.g. "Deluxe King") partners pick from by id when adding a `Room`.
 
@@ -349,7 +349,7 @@ The plain create-time DTOs (`HotelRequest`/`RoomRequest`/`RoomTypeRequest`) are 
 
 ## Flight Service
 
-Base URL: `http://localhost:8084` · Source: `flight-service/` · Package: `com.orbitra.flight_service`
+Base URL: `http://localhost:8084` · Source: `orbitra-be/flight-service/` · Package: `com.orbitra.flight_service`
 
 Entities: `Flight` (owned by a PARTNER account via `ownerId`, a partner may own many — **a single dated departure, not a recurring schedule**: same route on a different day is a different `Flight` row with its own unique `flightNumber`) → `FlightSeat` (a flight's own priced instance of a `SeatClass`, with `totalInventory` fixed by the partner and `availableCount` decremented only by the `reserve` endpoint below, called by Booking Service — never partner-editable directly). `SeatClass` is a separate, admin-managed global catalog (e.g. "Business") partners pick from by id when adding a `FlightSeat`. No `Availability`/date-range table, unlike Hotel Service — a `Flight` is already pinned to one date, so there's no calendar to override. See `docs/architecture&logic.md` for the full design rationale.
 
@@ -505,7 +505,7 @@ No `amenities` field, unlike `HotelDetailResponse` — this service has no fligh
 
 ## Booking Service
 
-Base URL: `http://localhost:8085` · Source: `booking-service/` · Package: `com.orbitra.booking_service`
+Base URL: `http://localhost:8085` · Source: `orbitra-be/booking-service/` · Package: `com.orbitra.booking_service`
 
 Entities: `Booking` (abstract, JOINED JPA inheritance — shared parent table holding `travelerId`, `status`, `totalPrice`, `createdAt`) → `HotelBooking`/`FlightBooking` (concrete extension tables holding only their own type-specific fields, no nulls either way). `totalPrice` is snapshotted once at creation (from Hotel/Flight Service's `reserve` response) and never recomputed — a partner changing their price later doesn't retroactively change what a past booking shows. `status` only ever moves `PENDING` → `CANCELLED` for now; `COMPLETED` and a payment-driven `CONFIRMED` transition wait for Payment Service (Phase 4).
 
