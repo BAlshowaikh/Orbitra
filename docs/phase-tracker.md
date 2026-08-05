@@ -81,13 +81,66 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 
 ## Frontend — Angular (starts after Phase 3)
 
-**Business goal:** the first real UI. Also personal: this is new territory for you, so budget more time here than the backend phases suggest — it's not "just wiring a screen to an API," it's a genuine learning curve.
-- [ ] Angular project setup + routing basics
-- [ ] Auth flow (register/login screens, JWT storage, route guards by role)
-- [ ] Browse/search screens (hotels, flights) — GUEST-accessible
-- [ ] Booking flow (reserve room/seat, view "My Trips")
-- [ ] Partner-side screens (hotel/flight listing CRUD) — only if time allows; traveler-side is the higher-value demo path
-- [ ] Note going in: booking status will only ever show `PENDING`/`CANCELLED` until Phase 4 ships Payment — don't treat that as a bug
+**Business goal:** the first real UI. Also personal: this is new territory for you, so budget more time here than the backend phases suggest.
+
+**Locked-in decisions**: standalone components, Angular Material + Tailwind (Preflight disabled), signals for state (no NgRx), Reactive Forms, `localStorage` JWT with no refresh-token flow, Playwright e2e added at the end. Backend now lives under `orbitra-be/`; this becomes a sibling `orbitra-fe/`.
+
+### Phase 0 — ✅ done — CORS prerequisite (`api-gateway`)
+- [x] **CORS config** — allow the Angular dev origin (`http://localhost:4200`)
+
+### Phase 1 — Project scaffold & tooling
+- [ ] **Project init** — `ng new orbitra-fe` (standalone, routing, SCSS)
+- [ ] **UI libraries** — Angular Material + Tailwind (Preflight disabled)
+- [ ] **Linting** — ESLint + Prettier
+- [ ] **Environments** — Gateway base URL config
+- [ ] **Folder skeleton** — `core/`, `shared/`, `layout/`, `features/`
+
+### Phase 2 — Core infrastructure
+- [ ] **Models** — mirror backend DTOs (`docs/api-reference.md`)
+- [ ] **AuthService** — JWT signal + `localStorage`, decodes claims for identity
+- [ ] **Auth interceptor** — attaches Bearer token
+- [ ] **Error interceptor** — normalizes `ErrorResponse`, handles 401
+- [ ] **Route guards** — auth / role / partnerType
+- [ ] **Layout shell** — role-aware navbar, footer
+
+### Phase 3 — Auth feature
+- [ ] **Register screen** — Reactive Form, conditional `partnerType`
+- [ ] **Login screen**
+
+### Phase 4 — Profile feature
+- [ ] **Profile screen** — view/edit, respect omitted-vs-null partial-update semantics
+
+### Phase 5 — Hotel browsing (public)
+- [ ] **Hotel search screen** — city/dates/guests/price
+- [ ] **Hotel detail screen**
+
+### Phase 6 — Flight browsing (public)
+- [ ] **Flight search screen** — single travel date
+- [ ] **Flight detail screen**
+
+### Phase 7 — Booking flow (priority milestone — makes the app demoable)
+- [ ] **Hotel room booking** — reserve/book
+- [ ] **Flight seat booking** — reserve/book
+- [ ] **My Bookings screen** — mixed hotel/flight, sealed response type
+- [ ] **Cancel booking**
+
+### Phase 8 — Partner features
+- [ ] **Hotel partner screens** — hotel/room CRUD + availability calendar
+- [ ] **Flight partner screens** — flight/seat CRUD
+
+### Phase 9 — Admin features
+- [ ] **Account management screen** — view/deactivate
+- [ ] **Catalog management screen** — room-type/seat-class CRUD
+
+### Phase 10 — E2E testing
+- [ ] **E2E suite** — Playwright golden-path coverage (traveler/partner/admin)
+
+### Phase 11 — Dockerize + polish
+- [ ] **Dockerfile** — multi-stage build for `orbitra-fe/`
+- [ ] **Compose entry** — frontend service in `docker-compose.yml`
+- [ ] **Docs update** — `CLAUDE.md` frontend Architecture + build-progress sections
+
+Note going in: booking status will only ever show `PENDING`/`CANCELLED` until Phase 4 ships Payment — don't treat that as a bug.
 
 ---
 

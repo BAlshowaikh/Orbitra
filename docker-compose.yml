@@ -24,7 +24,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
       # Passed through so init.sh (running inside this same container) can
-      # read them - see database/postgres/init.sh for what it does with these.
+      # read them - see orbitra-be/database/postgres/init.sh for what it does with these.
       AUTH_DB_NAME: ${AUTH_DB_NAME}
       AUTH_DB_USER: ${AUTH_DB_USER}
       AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
@@ -44,7 +44,7 @@ services:
       # Named volume: data survives container restarts/rebuilds.
       - postgres-data:/var/lib/postgresql/data
       # Runs automatically, once, only if the volume above is empty.
-      - ./database/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+      - ./orbitra-be/database/postgres/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -57,7 +57,7 @@ services:
   # clients
   eureka-service:
     build:
-      context: ./eureka-service
+      context: ./orbitra-be/eureka-service
       dockerfile: Dockerfile
     ports:
       - "8761:8761"
@@ -71,7 +71,7 @@ services:
   # network, not from outside Docker.
   api-gateway:
     build:
-      context: ./api-gateway
+      context: ./orbitra-be/api-gateway
       dockerfile: Dockerfile
     ports:
       - "8080:8080"
@@ -88,7 +88,7 @@ services:
   # ----------- auth-service -----------
   auth-service:
     build:
-      context: ./auth-service
+      context: ./orbitra-be/auth-service
       dockerfile: Dockerfile
     # No host port mapping - only reachable from other containers (like
     # api-gateway) on the Compose network, not from outside Docker.
@@ -116,7 +116,7 @@ services:
   # ----------- user-service -----------
   user-service:
     build:
-      context: ./user-service
+      context: ./orbitra-be/user-service
       dockerfile: Dockerfile
     # No host port mapping - only reachable from other containers (like
     # api-gateway) on the Compose network, not from outside Docker.
@@ -140,7 +140,7 @@ services:
   # ----------- hotel-service -----------
   hotel-service:
     build:
-      context: ./hotel-service
+      context: ./orbitra-be/hotel-service
       dockerfile: Dockerfile
     # No host port mapping - only reachable from other containers (like
     # api-gateway) on the Compose network, not from outside Docker.
@@ -165,7 +165,7 @@ services:
   # ----------- flight-service -----------
   flight-service:
     build:
-      context: ./flight-service
+      context: ./orbitra-be/flight-service
       dockerfile: Dockerfile
     # No host port mapping - only reachable from other containers (like
     # api-gateway) on the Compose network, not from outside Docker.
@@ -189,7 +189,7 @@ services:
   # ----------- booking-service -----------
   booking-service:
     build:
-      context: ./booking-service
+      context: ./orbitra-be/booking-service
       dockerfile: Dockerfile
     # No host port mapping - only reachable from other containers (like
     # api-gateway) on the Compose network, not from outside Docker.

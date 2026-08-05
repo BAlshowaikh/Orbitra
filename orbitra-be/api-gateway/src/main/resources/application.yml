@@ -55,6 +55,25 @@ spring:
               uri: lb://booking-service
               predicates:
                 - Path=/bookings/**
+      # CORS for browser clients (the Angular frontend) - without this, any
+      # cross-origin request carrying an Authorization header fails the
+      # browser's preflight before it ever reaches a route above. No
+      # credentials/cookies involved, so a plain explicit-origin allowlist
+      # is enough (no allow-credentials needed).
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - ${ALLOWED_ORIGINS:http://localhost:4200}
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - "*"
 
 # The conventional "front door" port for a gateway - distinct from the
 # business services (8081-8085) and eureka-service (8761).
