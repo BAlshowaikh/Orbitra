@@ -1,0 +1,7 @@
+/* You can add global styles to this file, and also import other style files */
+
+/* Preflight (Tailwind's CSS reset) intentionally omitted - it would strip the
+   base styles Angular Material's components are designed on top of. */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
