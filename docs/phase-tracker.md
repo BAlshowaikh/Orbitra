@@ -83,16 +83,16 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 
 **Business goal:** the first real UI. Also personal: this is new territory for you, so budget more time here than the backend phases suggest.
 
-**Locked-in decisions**: standalone components, Angular Material + Tailwind (Preflight disabled), signals for state (no NgRx), Reactive Forms, `localStorage` JWT with no refresh-token flow, Playwright e2e added at the end. Backend now lives under `orbitra-be/`; this becomes a sibling `orbitra-fe/`.
+**Locked-in decisions**: standalone components, Angular Material + Tailwind (Preflight disabled), signals for state (no NgRx), Reactive Forms, `localStorage` JWT with no refresh-token flow, Playwright e2e added at the end. Backend now lives under `orbitra-be/`; this becomes a sibling `orbitra-fe/`. Unit tests use **Vitest** (Angular 21's actual default, confirmed via the real scaffold — not Jasmine/Karma as first assumed); this project has no `zone.js` dependency, i.e. it's zoneless by default.
 
 ### Phase 0 — ✅ done — CORS prerequisite (`api-gateway`)
 - [x] **CORS config** — allow the Angular dev origin (`http://localhost:4200`)
 
 ### Phase 1 — Project scaffold & tooling
-- [ ] **Project init** — `ng new orbitra-fe` (standalone, routing, SCSS)
-- [ ] **UI libraries** — Angular Material + Tailwind (Preflight disabled)
-- [ ] **Linting** — ESLint + Prettier
-- [ ] **Environments** — Gateway base URL config
+- [x] **Project init** — `ng new orbitra-fe` (standalone, routing, Tailwind CSS selected at scaffold time instead of plain SCSS)
+- [x] **UI libraries** — Angular Material (Azure/Blue theme, `material-theme.scss`) + Tailwind, Preflight disabled in `styles.css`
+- [x] **Linting** — ESLint (`@angular-eslint`, flat config) + Prettier
+- [x] **Environments** — Gateway base URL config (`apiBaseUrl: http://localhost:8080`, both dev and prod for now)
 - [ ] **Folder skeleton** — `core/`, `shared/`, `layout/`, `features/`
 
 ### Phase 2 — Core infrastructure
