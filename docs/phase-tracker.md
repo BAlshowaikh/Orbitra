@@ -96,8 +96,8 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 - [ ] **Folder skeleton** — `core/`, `shared/`, `layout/`, `features/`
 
 ### Phase 2 — Core infrastructure
-- [ ] **Models** — mirror backend DTOs (`docs/api-reference.md`)
-- [ ] **AuthService** — JWT signal + `localStorage`, decodes claims for identity
+- [x] **Models** — auth/role/error/paged-response DTOs mirrored in `core/models/`; hotel/flight/booking-specific ones added when those features are built
+- [x] **AuthService** — JWT signal + `localStorage`, decodes claims for identity, `login()`/`register()`/`logout()`
 - [ ] **Auth interceptor** — attaches Bearer token
 - [ ] **Error interceptor** — normalizes `ErrorResponse`, handles 401
 - [ ] **Route guards** — auth / role / partnerType
