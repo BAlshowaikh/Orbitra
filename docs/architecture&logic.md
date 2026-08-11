@@ -179,6 +179,8 @@ Not package-by-layer like the other services — only `dto/`, `security/`, `rate
 
 **Backend service ports closed**: once routing/JWT/rate-limiting were verified working end to end, the 5 business services' host port mappings were removed from `docker-compose.yml` — they're still reachable to each other and to the Gateway over the internal Compose network by hostname, just no longer reachable directly from outside Docker.
 
+**CORS**: added as the first prerequisite of the Angular frontend work — a browser-based client sending a JWT `Authorization` header triggers a CORS preflight this service had no configuration to answer at all beforehand (confirmed by grep: zero CORS setup existed anywhere in this service before). Config-only (`globalcors` in `application.yml`), matching this service's existing "YAML routes, not Java" convention — an explicit-origin allowlist (`ALLOWED_ORIGINS`, dev default `http://localhost:4200`), though a wildcard would also have been fine here since no cookies/credentials are involved. See `docs/frontend-architecture&logic.md` for the frontend side of this.
+
 ---
 
 ## Payment Service — not yet built

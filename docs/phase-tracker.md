@@ -85,6 +85,8 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 
 **Locked-in decisions**: standalone components, Angular Material + Tailwind (Preflight disabled), signals for state (no NgRx), Reactive Forms, `localStorage` JWT with no refresh-token flow, Playwright e2e added at the end. Backend now lives under `orbitra-be/`; this becomes a sibling `orbitra-fe/`. Unit tests use **Vitest** (Angular 21's actual default, confirmed via the real scaffold — not Jasmine/Karma as first assumed); this project has no `zone.js` dependency, i.e. it's zoneless by default.
 
+**Folder structure (locked in 2026-08-10)**: `core/` (app-wide singletons: services, guards, interceptors, models — already built) and `layout/` (used-once shell pieces: navbar, footer) stay as top-level folders. `shared/` splits by kind of thing (`components/`, `directives/`, `pipes/` — generic, reusable across features). Each folder under `features/<name>/` splits by role: `pages/` (routable screens), `components/` (reusable pieces used by those pages, not routed to directly), `data-access/` (the feature's own `*ApiService`), `state/` (only if actually needed - not created preemptively), `<name>.routes.ts` (lazy-loaded from the main router). `AuthService` stays in `core/auth/` regardless — it's app-wide session state, not a per-feature concern; only the login/register *screens* go under `features/auth/pages/`.
+
 ### Phase 0 — ✅ done — CORS prerequisite (`api-gateway`)
 - [x] **CORS config** — allow the Angular dev origin (`http://localhost:4200`)
 
@@ -98,10 +100,10 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 ### Phase 2 — Core infrastructure
 - [x] **Models** — auth/role/error/paged-response DTOs mirrored in `core/models/`; hotel/flight/booking-specific ones added when those features are built
 - [x] **AuthService** — JWT signal + `localStorage`, decodes claims for identity, `login()`/`register()`/`logout()`
-- [ ] **Auth interceptor** — attaches Bearer token
-- [ ] **Error interceptor** — normalizes `ErrorResponse`, handles 401
-- [ ] **Route guards** — auth / role / partnerType
-- [ ] **Layout shell** — role-aware navbar, footer
+- [x] **Auth interceptor** — attaches Bearer token
+- [x] **Error interceptor** — normalizes `ErrorResponse` via `NotificationService`, handles 401
+- [x] **Route guards** — `authGuard` (→ `/login`), `roleGuard`/`partnerTypeGuard` factories (→ `/error` page, not built yet)
+- [x] **Layout shell** — role-aware navbar (`layout/navbar/`), footer (`layout/footer/`), wired into root `App` component
 
 ### Phase 3 — Auth feature
 - [ ] **Register screen** — Reactive Form, conditional `partnerType`
