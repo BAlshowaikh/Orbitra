@@ -1,0 +1,53 @@
+<!-- ============ AuthLayout: photo/branding/glass-card shell ============ -->
+<!-- Everything below is projected into AuthLayout's <ng-content> slot. -->
+<app-auth-layout>
+
+  <!-- ============ SECTION: heading (centered - field labels below are not) ============ -->
+  <h2 class="font-display text-center text-2xl font-medium">Welcome back</h2>
+  <p class="mt-1 text-center text-base text-muted">Log in to manage your bookings.</p>
+
+  <!-- ============ SECTION: form ============ -->
+  <!-- [formGroup] connects this <form> to loginForm (defined in login-page.ts);
+       each field binds to one of its controls via formControlName.
+       (ngSubmit) fires on submit (button click or Enter) and automatically
+       calls event.preventDefault() for us, so it never triggers a native
+       full-page-reload form submission. -->
+  <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="mt-6 flex flex-col gap-1">
+
+    <!-- ---- field: email ---- -->
+    <mat-form-field appearance="outline">
+      <mat-label>Email</mat-label>
+      <input matInput type="email" formControlName="email" autocomplete="email" />
+      <!-- mat-error only actually renders once the control is invalid AND
+           touched/dirty - Material handles that timing for us. -->
+      @if (loginForm.controls.email.hasError('required')) {
+        <mat-error>Email is required</mat-error>
+      }
+      @if (loginForm.controls.email.hasError('email')) {
+        <mat-error>Enter a valid email</mat-error>
+      }
+    </mat-form-field>
+
+    <!-- ---- field: password ---- -->
+    <mat-form-field appearance="outline">
+      <mat-label>Password</mat-label>
+      <input matInput type="password" formControlName="password" autocomplete="current-password" />
+      @if (loginForm.controls.password.hasError('required')) {
+        <mat-error>Password is required</mat-error>
+      }
+    </mat-form-field>
+
+    <!-- ---- submit ---- -->
+    <!-- Disabled while the form is invalid or a request is already in
+         flight, so a double-click can't fire two login attempts. -->
+    <button mat-flat-button type="submit" [disabled]="loginForm.invalid || isSubmitting" class="mt-2 text-base">
+      {{ isSubmitting ? 'Signing in…' : 'Sign in' }}
+    </button>
+  </form>
+
+  <!-- ============ SECTION: footer link ============ -->
+  <p class="mt-4 text-center text-base text-muted">
+    New to Orbitra? <a routerLink="/register" class="text-brand">Create an account</a>
+  </p>
+
+</app-auth-layout>

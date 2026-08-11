@@ -1,7 +1,11 @@
-<div class="flex min-h-screen flex-col">
+<!-- h-screen (exact viewport height), not min-h-screen (minimum only) - gives
+     <main> a real, fixed height budget to flex-1 into, so a page like
+     AuthLayout that fills "the rest of the screen" has something concrete
+     to fill rather than growing the whole page taller than the viewport. -->
+<div class="flex h-screen flex-col overflow-hidden">
   <app-navbar />
 
-  <main class="flex-1">
+  <main class="min-h-0 flex-1">
     <router-outlet />
   </main>
 
