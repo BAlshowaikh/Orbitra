@@ -4,14 +4,15 @@
 // Learn more about theming and how to use it for your application's
 // custom components at https://material.angular.dev/guide/theming
 @use '@angular/material' as mat;
+@use './theme-colors' as orbitra-theme;
 
 html {
   height: 100%;
   @include mat.theme(
     (
       color: (
-        primary: mat.$azure-palette,
-        tertiary: mat.$blue-palette,
+        primary: orbitra-theme.$primary-palette,
+        tertiary: orbitra-theme.$tertiary-palette,
       ),
       typography: Roboto,
       density: 0,
@@ -20,10 +21,10 @@ html {
 }
 
 body {
-  // Default the application to a light color theme. This can be changed to
-  // `dark` to enable the dark color theme, or to `light dark` to defer to the
-  // user's system settings.
-  color-scheme: light;
+  // `light dark` defers to the visitor's OS/browser preference automatically -
+  // a manual in-app toggle can override this later by setting `dark`/`light`
+  // explicitly once that feature exists.
+  color-scheme: light dark;
 
   // Set a default background, font and text colors for the application using
   // Angular Material's system-level CSS variables. Learn more about these

@@ -5,3 +5,63 @@
 @layer theme, base, components, utilities;
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
+
+/* Sora - display face for headings only. Material's own components (buttons,
+   form fields) stay on Roboto, set separately in material-theme.scss. */
+@import '@fontsource/sora/500.css';
+@import '@fontsource/sora/600.css';
+@import '@fontsource/sora/700.css';
+
+h1, h2, h3 {
+  font-family: 'Sora', sans-serif;
+}
+
+/* Registers Material's already-theme-aware system tokens as real Tailwind
+   color utilities (bg-surface, border-line, text-muted, etc.) - components
+   use plain Tailwind classes, never var(--mat-sys-...) directly. */
+@theme {
+  --color-surface: var(--mat-sys-surface);
+  --color-ink: var(--mat-sys-on-surface);
+  --color-muted: var(--mat-sys-on-surface-variant);
+  --color-line: var(--mat-sys-outline-variant);
+  --color-brand: var(--mat-sys-primary);
+  --color-on-brand: var(--mat-sys-on-primary);
+
+  /* generates the font-display utility - same Sora face h1/h2/h3 use */
+  --font-display: 'Sora', sans-serif;
+}
+
+/* Rounded everywhere, one place - MDC (the library Material's components are
+   built on) exposes each component family's corner radius as its own CSS
+   custom property; overriding them at :root changes every instance of that
+   component app-wide, same "one decision, not scattered overrides"
+   philosophy as the color tokens above. */
+:root {
+  --mdc-outlined-text-field-container-shape: 0.75rem;
+  --mdc-filled-button-container-shape: 0.75rem;
+  --mdc-outlined-button-container-shape: 0.75rem;
+  --mdc-outlined-card-container-shape: 1rem;
+}
+
+/* Fallback: the token overrides above didn't visibly take effect (wrong
+   token name for this Material version, most likely) - forcing border-radius
+   directly onto Material's actual rendered pieces instead, which doesn't
+   depend on knowing the exact right custom-property name. The outlined
+   field's border is drawn as three separate pieces (leading/notch/trailing)
+   to make room for the floating label, so only the outer two get rounded
+   corners - rounding the middle "notch" piece too would look wrong. */
+.mdc-notched-outline__leading {
+  border-radius: 0.75rem 0 0 0.75rem !important;
+}
+.mdc-notched-outline__trailing {
+  border-radius: 0 0.75rem 0.75rem 0 !important;
+}
+.mat-mdc-button-base {
+  border-radius: 0.75rem !important;
+}
+
+/* Material's default mat-error size is a small caption - bumping it to
+   actually be legible rather than the tiny default. */
+mat-error {
+  font-size: 0.85rem;
+}
