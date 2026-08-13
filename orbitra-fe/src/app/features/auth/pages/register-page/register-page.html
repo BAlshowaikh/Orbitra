@@ -1,0 +1,73 @@
+<!-- ============ AuthLayout: photo/branding/glass-card shell ============ -->
+<!-- Everything below is projected into AuthLayout's <ng-content> slot. -->
+<app-auth-layout>
+
+  <!-- ============ SECTION: heading ============ -->
+  <h2 class="font-display text-center text-2xl font-medium">Create your account</h2>
+  <p class="mt-1 text-center text-base text-muted">Join Orbitra to book or list with us.</p>
+
+  <!-- ============ SECTION: form ============ -->
+  <form [formGroup]="registerForm" (ngSubmit)="onSubmit()" class="mt-6 flex flex-col gap-1">
+
+    <!-- ---- field: email ---- -->
+    <mat-form-field appearance="outline">
+      <mat-label>Email</mat-label>
+      <input matInput type="email" formControlName="email" autocomplete="email" />
+      @if (registerForm.controls.email.hasError('required')) {
+        <mat-error>Email is required</mat-error>
+      }
+      @if (registerForm.controls.email.hasError('email')) {
+        <mat-error>Enter a valid email</mat-error>
+      }
+    </mat-form-field>
+
+    <!-- ---- field: password ---- -->
+    <mat-form-field appearance="outline">
+      <mat-label>Password</mat-label>
+      <input matInput type="password" formControlName="password" autocomplete="new-password" />
+      @if (registerForm.controls.password.hasError('required')) {
+        <mat-error>Password is required</mat-error>
+      }
+      @if (registerForm.controls.password.hasError('minlength')) {
+        <mat-error>At least 8 characters</mat-error>
+      }
+    </mat-form-field>
+
+    <!-- ---- field: role - segmented control, Traveler vs Partner only, Admin
+         is never offered here (bootstrap admin creation is a manual,
+         one-time backend action) ---- -->
+    <div class="mt-2">
+      <span class="text-sm text-muted">Role</span>
+      <mat-button-toggle-group formControlName="role" hideSingleSelectionIndicator class="mt-1 flex w-full">
+        <mat-button-toggle value="TRAVELER" class="flex-1">Traveler</mat-button-toggle>
+        <mat-button-toggle value="PARTNER" class="flex-1">Partner</mat-button-toggle>
+      </mat-button-toggle-group>
+    </div>
+
+    <!-- ---- field: partnerType - only rendered, and only required, while
+         role is PARTNER (see the valueChanges subscription in register-page.ts) ---- -->
+    @if (registerForm.controls.role.value === 'PARTNER') {
+      <div class="mt-2">
+        <span class="text-sm text-muted">Partner type</span>
+        <mat-button-toggle-group formControlName="partnerType" hideSingleSelectionIndicator class="mt-1 flex w-full">
+          <mat-button-toggle value="HOTEL" class="flex-1">Hotel</mat-button-toggle>
+          <mat-button-toggle value="FLIGHT" class="flex-1">Flight</mat-button-toggle>
+        </mat-button-toggle-group>
+        @if (registerForm.controls.partnerType.hasError('required')) {
+          <p class="mt-1 text-sm text-error">Choose one</p>
+        }
+      </div>
+    }
+
+    <!-- ---- submit ---- -->
+    <button mat-flat-button type="submit" [disabled]="registerForm.invalid || isSubmitting" class="mt-4 text-base">
+      {{ isSubmitting ? 'Creating account…' : 'Create account' }}
+    </button>
+  </form>
+
+  <!-- ============ SECTION: footer link ============ -->
+  <p class="mt-4 text-center text-base text-muted">
+    Already have an account? <a routerLink="/login" class="text-brand">Log in</a>
+  </p>
+
+</app-auth-layout>

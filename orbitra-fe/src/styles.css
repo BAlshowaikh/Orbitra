@@ -26,6 +26,7 @@ h1, h2, h3 {
   --color-line: var(--mat-sys-outline-variant);
   --color-brand: var(--mat-sys-primary);
   --color-on-brand: var(--mat-sys-on-primary);
+  --color-error: var(--mat-sys-error);
 
   /* generates the font-display utility - same Sora face h1/h2/h3 use */
   --font-display: 'Sora', sans-serif;
