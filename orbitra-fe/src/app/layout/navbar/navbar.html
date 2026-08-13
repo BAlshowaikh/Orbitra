@@ -1,0 +1,25 @@
+<nav class="flex items-center justify-between border-b border-line bg-surface px-6 py-4">
+  <a routerLink="/" class="font-display text-lg font-semibold">Orbitra</a>
+
+  <div class="flex items-center gap-4">
+    <!-- Public - visible to everyone, GUEST included, no login required -->
+    <a routerLink="/hotels">Hotels</a>
+    <a routerLink="/flights">Flights</a>
+
+    @if (authService.isAuthenticated()) {
+      @if (authService.isTraveler()) {
+        <a routerLink="/bookings/mine">My Bookings</a>
+      }
+      @if (authService.isPartner()) {
+        <a routerLink="/partner">Partner Dashboard</a>
+      }
+      @if (authService.isAdmin()) {
+        <a routerLink="/admin">Admin</a>
+      }
+      <button (click)="logout()">Logout</button>
+    } @else {
+      <a routerLink="/login">Login</a>
+      <a routerLink="/register">Register</a>
+    }
+  </div>
+</nav>

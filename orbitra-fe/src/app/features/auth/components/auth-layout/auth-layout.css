@@ -1,0 +1,31 @@
+/* Angular custom elements default to display: inline with no intrinsic
+   height - without this, height: 100% on .auth-layout below would have
+   nothing real to be 100% of. */
+:host {
+  display: block;
+  height: 100%;
+}
+
+/* Fills whatever height <main class="flex-1"> actually gives this route
+   (viewport minus navbar minus footer) - not 100vh, which would ignore
+   that the navbar/footer are also on screen and push the total page taller
+   than the viewport. */
+.auth-layout {
+  height: 100%;
+  overflow: hidden;
+  background-image: linear-gradient(rgba(8, 6, 16, 0.35), rgba(8, 6, 16, 0.55)), url('/images/auth-bg.png');
+  background-size: cover;
+  background-position: center;
+}
+
+/* Glassmorphism: translucent + blurred. Fixed light tint regardless of the
+   app's own light/dark mode - same reasoning as the branding text (this
+   card always sits on the same dark photo, so a theme-following color would
+   go dark-on-dark in dark mode, which read as "not glass, just dark"). */
+.card {
+  background-color: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(1.5rem);
+  -webkit-backdrop-filter: blur(1.5rem);
+  border: 0.0625rem solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 1.25rem 3.75rem rgba(0, 0, 0, 0.35);
+}
