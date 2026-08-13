@@ -105,9 +105,9 @@ Living checklist for what's left to build, in order. Companion to `travel-platfo
 - [x] **Route guards** — `authGuard` (→ `/login`), `roleGuard`/`partnerTypeGuard` factories (→ `/error` page, not built yet)
 - [x] **Layout shell** — role-aware navbar (`layout/navbar/`), footer (`layout/footer/`), wired into root `App` component
 
-### Phase 3 — Auth feature
-- [ ] **Register screen** — Reactive Form, conditional `partnerType`
-- [ ] **Login screen**
+### Phase 3 — ✅ done — Auth feature
+- [x] **Register screen** — Reactive Form, segmented-control (`mat-button-toggle-group`) role/partnerType, conditional validator via `role.valueChanges`
+- [x] **Login screen**
 
 ### Phase 4 — Profile feature
 - [ ] **Profile screen** — view/edit, respect omitted-vs-null partial-update semantics
